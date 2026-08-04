@@ -49,6 +49,12 @@
   <p><em>Real-Time Terminal Status Bar (Default Theme)</em></p>
 </div>
 
+### Terminal Text Preview (Vivid Theme)
+```text
+Claude 3.7 Sonnet high -> devpilot-studio $0.42
+ctx ▓▓▓▓░░░░░░ 42%   5h  ▓▓▓▓▓▓░░░░ 63% (resets 2h 15m) ⚠ 1h 36m   7d  ▓▓▓▓▓▓▓▓░░ 88% (resets 3d 4h) ⚠ 12h 32m
+```
+
 *More screenshots coming soon:*
 - **Interactive Configuration Wizard** (`dps config`)
 - **7-Day Trend Sparklines** (`dps history`)
