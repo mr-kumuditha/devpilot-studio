@@ -26,7 +26,7 @@
 # Home: https://github.com/mr-kumuditha/devpilot-studio
 # License: MIT (see LICENSE and NOTICE.md)
 
-DPS_VERSION="1.0.0"
+DPS_VERSION="1.1.0"
 
 # ----------------------------------------------------------------------------
 # Configuration & State Paths
