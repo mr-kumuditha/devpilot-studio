@@ -1,6 +1,6 @@
 {
   "name": "devpilot-studio",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "DevPilot Studio — A professional desktop utility for managing Claude Code workflows, AI development sessions, project status, MCP servers, prompts, Git repositories, and developer productivity.",
   "bin": {
     "dps": "cli.js",

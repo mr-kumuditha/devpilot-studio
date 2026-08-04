@@ -14,7 +14,7 @@ The user can customize:
 
 Run the config wizard:
 
-!`"${CLAUDE_PLUGIN_ROOT}/bin/devpilot" config`
+!bash `"${CLAUDE_PLUGIN_ROOT}/bin/devpilot" config`
 
 After configuring, tell the user to **start a new Claude Code session** (or restart)
 to see the updated status bar.

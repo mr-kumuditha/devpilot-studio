@@ -9,7 +9,7 @@ Run the uninstall command. This removes the `statusLine` entry from
 `~/.claude/settings.json` (keeping a `.bak` backup), and optionally deletes
 the devpilot binary and configuration:
 
-!`"${CLAUDE_PLUGIN_ROOT}/bin/devpilot" uninstall`
+!bash `"${CLAUDE_PLUGIN_ROOT}/bin/devpilot" uninstall`
 
 After uninstalling, tell the user:
 

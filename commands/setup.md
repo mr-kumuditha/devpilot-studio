@@ -10,7 +10,7 @@ Run the plugin setup script. It detects the platform, checks for `jq`, copies th
 `~/.claude/settings.json` as the status line — merging with any existing settings
 and writing a `.bak` backup first:
 
-!`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"`
+!bash `"${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"`
 
 Then tell the user:
 
