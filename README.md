@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="680" />
+  <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="480" />
 
   <h1>DevPilot Studio (DPS)</h1>
 
