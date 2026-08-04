@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Setup": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh\"",
+            "statusMessage": "Setting up DevPilot Studio..."
+          }
+        ]
+      }
+    ]
+  }
+}
