@@ -1,23 +1,36 @@
 {
   "name": "devpilot-studio",
   "metadata": {
-    "description": "DevPilot Studio — developer tooling by Kumuditha Labs."
+    "description": "DevPilot Studio — professional terminal status bar and usage analytics for Claude Code sessions. By Kumuditha Labs.",
+    "homepage": "https://github.com/mr-kumuditha/devpilot-studio#readme",
+    "license": "MIT"
   },
   "owner": {
     "name": "Kumuditha Tharinda Liyanage",
-    "email": "hello@kumuditha.dev",
+    "email": "dev@tharinda.dev",
     "url": "https://github.com/mr-kumuditha"
   },
   "plugins": [
     {
-      "name": "dps",
+      "name": "devpilot-studio",
       "source": "./",
-      "description": "DevPilot Studio — A professional desktop utility for managing Claude Code workflows, AI development sessions, project status, MCP servers, prompts, Git repositories, and developer productivity.",
-      "version": "1.0.0",
-      "author": { "name": "Kumuditha Tharinda Liyanage" },
+      "description": "Real-time terminal status bar for Claude Code — context window, rate limits, 5-hour/7-day quotas, burn-rate alerts, sparkline history, and preset themes.",
+      "version": "1.1.0",
+      "author": {
+        "name": "Kumuditha Tharinda Liyanage"
+      },
       "homepage": "https://github.com/mr-kumuditha/devpilot-studio#readme",
       "license": "MIT",
-      "keywords": ["devpilot-studio", "dps", "devpilot", "claude-code", "statusline", "cli", "terminal"]
+      "category": "developer-tools",
+      "tags": [
+        "statusline",
+        "status-bar",
+        "rate-limits",
+        "context-window",
+        "analytics",
+        "terminal",
+        "productivity"
+      ]
     }
   ]
 }
