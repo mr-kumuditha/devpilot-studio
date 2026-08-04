@@ -103,7 +103,7 @@ Shows comprehensive session telemetry including exact token counts (`84k / 200k`
 Generates 8-level terminal sparkline charts (`▃▆▇▄▅▅▅`) and daily peak rollups without requiring external database servers or background daemons.
 
 ### 🎨 Custom Color Themes & Preset Gallery (`dps gallery`)
-Includes `default` (subtle dimmed tones), `mono` (clean grayscale), and `vivid` (high-contrast vibrant colors) with customizable unicode blocks (`█░`), shaded characters (`▓░`), or ASCII bars (`=-`).
+Includes `default` (subtle dimmed tones), `mono` (clean grayscale), and `vivid` (high-contrast vibrant colors) with customizable unicode blocks (`█░`), shaded characters (`▓░`), or ASCII bars [...]
 
 ### 🛡️ Zero Dependencies & 100% Offline Privacy
 Operates completely offline with zero telemetry, zero analytics tracking, and zero npm runtime dependencies. All preferences and history remain strictly on your machine.
@@ -287,7 +287,7 @@ See [docs/DEVELOPER.md](docs/DEVELOPER.md) for detailed build and test instructi
 ## 🔒 Security & Privacy
 
 > [!NOTE]
-> DevPilot Studio is engineered with a strict **privacy-first architecture**. It makes **zero outbound network requests** during status line rendering and contains **zero telemetry or analytics tracking**. All history logs and configuration data reside exclusively under your local home directory.
+> DevPilot Studio is engineered with a strict **privacy-first architecture**. It makes **zero outbound network requests** during status line rendering and contains **zero telemetry or analytics t[...]
 
 Review the full [Security Audit Report](reports/security-audit.md).
 
