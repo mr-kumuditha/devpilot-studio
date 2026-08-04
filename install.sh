@@ -17,7 +17,7 @@ set -eu
 
 REPO="mr-kumuditha/devpilot-studio"
 REF="${DPS_REF:-main}"
-RAW_BASE="https://raw.githubusercontent/${REPO}/${REF}"
+RAW_BASE="https://raw.githubusercontent.com/${REPO}/${REF}"
 
 BIN_DIR="$HOME/.local/bin"
 BIN="$BIN_DIR/devpilot"

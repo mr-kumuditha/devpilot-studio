@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bin/devpilot render *)",
+      "Bash(bin/devpilot version *)",
+      "Bash(bin/devpilot demo *)"
+    ]
+  }
+}
