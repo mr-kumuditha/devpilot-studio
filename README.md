@@ -1,11 +1,11 @@
 <div align="center">
 
-  <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="480" />
+  <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="680" />
 
   <h1>DevPilot Studio (DPS)</h1>
 
   <p>
-    <strong>A Professional Desktop Utility & CLI Engine for AI Workflows, Session Tracking, MCP Management, and Developer Productivity</strong>
+    <strong>A Claude Code Marketplace Plugin — Real-Time Terminal Status Bar for AI Workflows, Rate Limits, and Developer Productivity</strong>
   </p>
 
   <p>
@@ -17,13 +17,12 @@
   </p>
 
   <p>
-    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-plugin-installation-recommended">Install Plugin</a> •
     <a href="#-features">Features</a> •
     <a href="#-cli-command-reference">CLI Reference</a> •
-    <a href="docs/INSTALLATION.md">Installation</a> •
-    <a href="docs/CONFIGURATION.md">Configuration</a> •
-    <a href="docs/ARCHITECTURE.md">Architecture</a> •
-    <a href="reports/final-summary.md">Reports</a>
+    <a href="#%EF%B8%8F-configuration--environment">Configuration</a> •
+    <a href="#-faq">FAQ</a> •
+    <a href="#-contributing">Contributing</a>
   </p>
 
 </div>
@@ -31,43 +30,56 @@
 ---
 
 > [!IMPORTANT]
-> **DevPilot Studio** is built from the ground up for developers who demand complete visibility into their AI sessions, rate limits, context windows, and workspace productivity — delivered with zero runtime dependencies and 100% offline privacy.
+> **DevPilot Studio** is a Claude Code Marketplace plugin that gives you complete visibility into your AI sessions — context window capacity, rate limits, burn-rate velocity alerts, and 7-day usage trends — directly in your terminal. Zero runtime dependencies. 100% offline privacy.
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Plugin Installation (Recommended)
 
-Install and wire **DevPilot Studio** into your workflow in seconds:
+Install DevPilot Studio directly from the Claude Code plugin system in **3 commands**:
 
-### Option 1: NPX Installer (Recommended)
+### Step 1: Add the marketplace
+
+```
+/plugin marketplace add mr-kumuditha/devpilot-studio
+```
+
+### Step 2: Install the plugin
+
+```
+/plugin install devpilot-studio
+```
+
+### Step 3: Set up the status bar
+
+```
+/devpilot-studio:setup
+```
+
+**Done!** Start a new Claude Code session (or restart) and the status bar appears automatically.
+
+> [!TIP]
+> You can also run these from the CLI outside a session:
+> ```bash
+> claude plugin marketplace add mr-kumuditha/devpilot-studio
+> claude plugin install devpilot-studio@devpilot-studio
+> ```
+> Then run `/devpilot-studio:setup` inside your next session.
+
+---
+
+## 🔧 Alternative Installation Methods
+
+### Option A: NPX Installer
 
 ```bash
 npx devpilot-studio
 ```
 
-### Option 2: Standalone Curl Installer
+### Option B: Standalone Curl Installer
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mr-kumuditha/devpilot-studio/main/install.sh | bash
-```
-
-### Basic CLI Usage
-
-```bash
-# Render status bar from piped input stream
-dps render
-
-# Open expanded real-time usage statistics dashboard
-dps stats
-
-# View 7-day usage trends & peak sparklines
-dps history
-
-# Launch interactive terminal setup wizard
-dps config
-
-# Preview preset themes and bar styles
-dps gallery
 ```
 
 ---
@@ -79,7 +91,7 @@ dps gallery
 </div>
 
 ### 🖥️ Real-Time Terminal Status Bar
-Displays your active AI model, effort level, workspace directory, and live usage progress bars for context window capacity, 5-hour rate limits, and 7-day plan quotas directly inside your terminal session.
+Displays your active AI model, effort level, workspace directory, and colored usage progress bars for context window capacity, 5-hour rate limits, and 7-day plan quotas directly inside your terminal session.
 
 ### ⚠️ Intelligent Burn-Rate Velocity Alerts
 Calculates your current token burn rate and alerts you (`⚠`) when session velocity projects hitting quota limits before reset countdowns expire.
@@ -95,6 +107,9 @@ Includes `default` (subtle dimmed tones), `mono` (clean grayscale), and `vivid` 
 
 ### 🛡️ Zero Dependencies & 100% Offline Privacy
 Operates completely offline with zero telemetry, zero analytics tracking, and zero npm runtime dependencies. All preferences and history remain strictly on your machine.
+
+### 🔌 Claude Code Plugin Integration
+Native Claude Code Marketplace plugin with slash commands, lifecycle hooks, and automatic installation — no manual configuration required.
 
 ---
 
@@ -114,6 +129,15 @@ Operates completely offline with zero telemetry, zero analytics tracking, and ze
 | `dps uninstall` | Removes status bar configuration from settings | `dps uninstall` |
 | `dps version` | Displays version information | `dps version` |
 | `dps help` | Shows CLI usage and help text | `dps help` |
+
+### Plugin Slash Commands
+
+| Command | Description |
+| --- | --- |
+| `/devpilot-studio:setup` | Install and configure the status bar automatically |
+| `/devpilot-studio:configure` | Launch the interactive theme/segment config wizard |
+| `/devpilot-studio:demo` | Preview status bar, stats panel, and history chart |
+| `/devpilot-studio:uninstall` | Clean removal with backup preservation |
 
 ---
 
@@ -171,6 +195,65 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/devpilot/config
 
 ---
 
+## 🔄 Updating
+
+DevPilot Studio supports updates through the Claude Code plugin system:
+
+```
+/plugin update devpilot-studio
+```
+
+Or manually update by pulling the latest version:
+
+```bash
+cd ~/.claude/plugins/devpilot-studio
+git pull
+```
+
+Then run `/devpilot-studio:setup` to apply the update. Your personal configuration (`~/.config/devpilot/config`) and history data (`~/.local/state/devpilot/history.tsv`) are always preserved during updates.
+
+---
+
+## 🗑️ Uninstalling
+
+### Via Plugin Command
+
+```
+/devpilot-studio:uninstall
+```
+
+### Via CLI
+
+```bash
+dps uninstall
+```
+
+This removes the `statusLine` entry from `~/.claude/settings.json` (a `.bak` backup is created). Your usage history and config are preserved unless you explicitly choose to delete them.
+
+---
+
+## ❓ FAQ
+
+**Q: Why does the status bar not appear?**
+A: Start a **new** Claude Code session after running `/devpilot-studio:setup`. Older versions of Claude Code may require a full restart.
+
+**Q: I get "jq not found" — what do I do?**
+A: Install `jq` via your package manager:
+- macOS: `brew install jq`
+- Ubuntu/Debian: `sudo apt-get install -y jq`
+- Fedora: `sudo dnf install -y jq`
+
+**Q: Does it work on Windows?**
+A: DevPilot Studio requires Bash and works on macOS and Linux. On Windows, use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) (Windows Subsystem for Linux).
+
+**Q: Does it send data anywhere?**
+A: No. DevPilot Studio is 100% offline. Zero telemetry, zero analytics, zero network requests. All data stays on your machine.
+
+**Q: Can I use it with other status line tools?**
+A: The `statusLine` config supports one command at a time. DevPilot Studio replaces any existing status line configuration (a `.bak` backup is always created).
+
+---
+
 ## 📚 Documentation Index
 
 - 📖 [Installation Guide](docs/INSTALLATION.md) — Comprehensive environment setup & PATH configuration.
@@ -179,8 +262,25 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/devpilot/config
 - 🛠️ [Developer Guide](docs/DEVELOPER.md) — Building, testing, and contributing to DevPilot Studio.
 - 🚀 [Release Guide](docs/RELEASE.md) — Versioning policy and release workflows.
 - 🔍 [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — Solutions for common terminal setup questions.
-- 📋 [Final Summary Report](reports/final-summary.md) — Exhaustive audit summary & file modification log.
-- ⚖️ [Legal Compliance Audit](reports/legacy-references-audit.md) — Verification of MIT legal attributions.
+- 📋 [Changelog](CHANGELOG.md) — Version history and release notes.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! To get started:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Make your changes and test locally:
+   ```bash
+   cat test/sample-input.json | bin/devpilot render
+   bin/devpilot demo
+   ```
+4. Commit with conventional commit messages (`feat:`, `fix:`, `docs:`)
+5. Push and open a Pull Request
+
+See [docs/DEVELOPER.md](docs/DEVELOPER.md) for detailed build and test instructions.
 
 ---
 

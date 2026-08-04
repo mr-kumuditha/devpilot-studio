@@ -11,3 +11,7 @@
 .npmrc
 node_modules/
 *.tgz
+
+# CI artifacts
+coverage/
+.nyc_output/
