@@ -1,7 +1,7 @@
 <div align="center">
 
   <div style="display:flex;align-items:center;gap:16px;justify-content:center;padding:12px 0;background:#f6f8fa;border-radius:8px">
-    <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="140" height="36" style="object-fit:contain" />
+    <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="440" height="356" style="object-fit:contain" />
     <div style="text-align:left">
       <h1 style="margin:0;font-size:20px">DevPilot Studio (DPS)</h1>
       <p style="margin:4px 0 0;font-size:12px;color:#555">
