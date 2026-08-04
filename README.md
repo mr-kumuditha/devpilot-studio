@@ -9,12 +9,12 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/Version-1.1.3-blue.svg?style=for-the-badge&logo=anthropic)](https://github.com/mr-kumuditha/devpilot-studio)
+[![Version](https://img.shields.io/badge/Version-1.1.4-blue.svg?style=for-the-badge&logo=anthropic)](https://github.com/mr-kumuditha/devpilot-studio)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Marketplace%20Plugin-000000?style=for-the-badge&logo=anthropic&logoColor=white)](https://github.com/mr-kumuditha/devpilot-studio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 [![Security: 100% Offline](https://img.shields.io/badge/Security-100%25%20Offline-success?style=for-the-badge&logo=shield&logoColor=white)](reports/security-audit.md)
 
-[Install Plugin](#-plugin-installation-recommended) • [Features](#-features) • [Commands](#%EF%B8%8F-slash-commands--cli) • [FAQ](#-faq)
+[Install Plugin](#-plugin-installation-recommended) • [Features](#-features) • [Commands](#-slash-commands--cli) • [Config](#%EF%B8%8F-configuration--environment) • [FAQ](#-faq)
 
 <br/>
 
@@ -76,7 +76,7 @@ Engineered with absolute privacy. DevPilot Studio operates completely offline. *
 
 ---
 
-## ⚙️ Slash Commands & CLI
+## 💻 Slash Commands & CLI
 
 DevPilot Studio provides native Claude Code Slash Commands as well as a powerful standalone CLI `dps`.
 
@@ -88,14 +88,103 @@ DevPilot Studio provides native Claude Code Slash Commands as well as a powerful
 | `/devpilot-studio:demo` | Previews the status bar, stats panel, and history chart in your terminal |
 | `/devpilot-studio:uninstall` | Safely removes the plugin hooks and restores your old settings |
 
-### 💻 CLI Reference (Run in your normal terminal)
-| Command | Description |
-| :--- | :--- |
-| `dps config` | Runs the interactive setup wizard for themes & bar styles |
-| `dps stats` | Displays the expanded real-time usage stats panel |
-| `dps history` | Displays 7-day usage trends & peak sparkline chart |
-| `dps gallery` | Browses and immediately applies preset visual themes |
-| `dps render` | (Internal) Reads JSON from stdin and outputs the status line |
+### 🛠️ CLI Reference (Run in your normal terminal)
+| Command | Description | Example Usage |
+| :--- | :--- | :--- |
+| `dps render` | Reads status JSON from stdin and renders formatted status bar | `cat status.json \| dps render` |
+| `dps stats` | Displays expanded real-time usage stats panel | `dps stats` |
+| `dps history` | Displays 7-day usage trends & peak sparkline chart | `dps history` |
+| `dps config` | Runs interactive setup wizard for themes & bar styles | `dps config` |
+| `dps gallery` | Browses and applies preset visual themes | `dps gallery` |
+| `dps demo` | Previews status bar with sample data | `dps demo` |
+| `dps demo stats` | Previews expanded statistics panel with sample data | `dps demo stats` |
+| `dps demo history` | Previews 7-day history panel with sample data | `dps demo history` |
+| `dps install` | Copies executable to `~/.local/bin` and configures settings | `dps install` |
+| `dps uninstall` | Removes status bar configuration from settings | `dps uninstall` |
+| `dps version` | Displays version information | `dps version` |
+| `dps help` | Shows CLI usage and help text | `dps help` |
+
+---
+
+## 🏗️ Architecture & Technical Blueprint
+
+```
++-------------------------------------------------------------------------+
+|                         Claude Code CLI Session                         |
++-------------------------------------------------------------------------+
+                                     |
+                                     | Status JSON on stdin
+                                     v
++-------------------------------------------------------------------------+
+|                  DevPilot Studio Engine (bin/devpilot)                  |
+|                                                                         |
+|  +---------------------+  +--------------------+  +------------------+  |
+|  | Config & Theme      |  | Real-Time Status   |  | Stats & History  |  |
+|  | Loader              |  | Bar Renderer       |  | Logging Subsystem|  |
+|  +---------------------+  +--------------------+  +------------------+  |
++-------------------------------------------------------------------------+
+         |                                |                        |
+         v                                v                        v
+  ~/.config/devpilot             Terminal Output            ~/.local/state/
+      /config                  (2-line status bar)             devpilot
+                                                             /history.tsv
+```
+
+For full architectural documentation, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## ⚙️ Configuration & Environment
+
+DevPilot Studio configuration is stored in a clean, hand-editable file at:
+```
+${XDG_CONFIG_HOME:-$HOME/.config}/devpilot/config
+```
+
+### Environment Variables
+
+| Variable | Type | Description | Default |
+| --- | --- | --- | --- |
+| `DPS_ORG` | String | Custom badge text displayed at front of status bar | `""` |
+| `DPS_THEME` | String | Color theme (`default`, `mono`, `vivid`) | `default` |
+| `DPS_BAR_WIDTH` | Integer | Progress bar width in character cells | `10` |
+| `DPS_BAR_FILLED` | Char | Character used for filled portion of progress bar | `█` |
+| `DPS_BAR_EMPTY` | Char | Character used for empty portion of progress bar | `░` |
+| `DPS_SHOW_EFFORT` | Boolean | Toggle display of model effort level (`1`/`0`) | `1` |
+| `DPS_SHOW_CTX` | Boolean | Toggle display of context window capacity bar (`1`/`0`) | `1` |
+| `DPS_SHOW_5H` | Boolean | Toggle display of 5-hour rate limit bar (`1`/`0`) | `1` |
+| `DPS_SHOW_7D` | Boolean | Toggle display of 7-day rate limit bar (`1`/`0`) | `1` |
+| `DPS_SHOW_COST` | Boolean | Toggle display of session cost (`1`/`0`) | `0` |
+| `DPS_SHOW_BURN` | Boolean | Toggle velocity burn-rate warning (`1`/`0`) | `1` |
+| `DPS_HISTORY` | Boolean | Toggle local history logging (`1`/`0`) | `1` |
+
+---
+
+## 🔄 Updating
+
+DevPilot Studio supports seamless updates through the Claude Code plugin system:
+
+```bash
+/plugin update devpilot-studio
+```
+
+Then run `/devpilot-studio:setup` to apply the update. Your personal configuration (`~/.config/devpilot/config`) and history data (`~/.local/state/devpilot/history.tsv`) are always preserved during updates.
+
+---
+
+## 🗑️ Uninstalling
+
+### Via Plugin Command
+```bash
+/devpilot-studio:uninstall
+```
+
+### Via CLI
+```bash
+dps uninstall
+```
+
+This removes the `statusLine` entry from `~/.claude/settings.json` (a `.bak` backup is created). Your usage history and config are preserved unless you explicitly choose to delete them.
 
 ---
 
@@ -112,26 +201,63 @@ DevPilot Studio provides native Claude Code Slash Commands as well as a powerful
 - **macOS**: `brew install jq`
 - **Ubuntu/Debian**: `sudo apt-get install -y jq`
 
+**Q: Does it work on Windows?**  
+**A:** DevPilot Studio requires Bash and works natively on macOS and Linux. On Windows, use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) (Windows Subsystem for Linux).
+
 **Q: Does it send my telemetry data anywhere?**  
 **A:** Absolutely not. DevPilot Studio is strictly 100% offline. Zero network requests are made. Period.
 
----
-
-## 🤝 Contributing & Documentation
-
-Contributions are extremely welcome! DevPilot Studio is built entirely in POSIX bash for ultimate portability and speed.
-
-- 📖 [Installation Guide](docs/INSTALLATION.md)
-- ⚙️ [Configuration Guide](docs/CONFIGURATION.md)
-- 📐 [Architecture Specification](docs/ARCHITECTURE.md)
-- 🛠️ [Developer Guide](docs/DEVELOPER.md)
-- 📋 [Changelog](CHANGELOG.md)
+**Q: Can I use it with other status line tools?**  
+**A:** The `statusLine` config supports one command at a time. DevPilot Studio safely replaces any existing status line configuration (a `.bak` backup is always created).
 
 ---
+
+## 📚 Documentation Index
+
+- 📖 [Installation Guide](docs/INSTALLATION.md) — Comprehensive environment setup & PATH configuration.
+- ⚙️ [Configuration Guide](docs/CONFIGURATION.md) — Customizing themes, display segments, and bar styles.
+- 📐 [Architecture Specification](docs/ARCHITECTURE.md) — Subsystem layout, data pipelines, and extensible router.
+- 🛠️ [Developer Guide](docs/DEVELOPER.md) — Building, testing, and contributing to DevPilot Studio.
+- 🚀 [Release Guide](docs/RELEASE.md) — Versioning policy and release workflows.
+- 🔍 [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — Solutions for common terminal setup questions.
+- 📋 [Changelog](CHANGELOG.md) — Version history and release notes.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! To get started:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Make your changes and test locally:
+   ```bash
+   cat test/sample-input.json | bin/devpilot render
+   bin/devpilot demo
+   ```
+4. Commit with conventional commit messages (`feat:`, `fix:`, `docs:`)
+5. Push and open a Pull Request
+
+See [docs/DEVELOPER.md](docs/DEVELOPER.md) for detailed build and test instructions.
+
+---
+
+## 🔒 Security & Privacy
+
+> [!NOTE]
+> DevPilot Studio is engineered with a strict **privacy-first architecture**. It makes **zero outbound network requests** during status line rendering and contains **zero telemetry or analytics tracking**. 
+
+Review the full [Security Audit Report](reports/security-audit.md).
+
+---
+
+## 📄 License & Legal Attribution
+
+- **Author & Developer**: Kumuditha Tharinda Liyanage
+- **Company**: Kumuditha Labs
+- **Copyright**: © 2026 Kumuditha Tharinda Liyanage
+- **License**: MIT License — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for full legal notices.
 
 <div align="center">
-  <b>Author & Developer</b>: Kumuditha Tharinda Liyanage<br/>
-  <b>Company</b>: Kumuditha Labs<br/>
-  <i>Licensed under the MIT License</i><br/><br/>
   <sub>DevPilot Studio is an independent developer utility by Kumuditha Labs. "Claude" and "Claude Code" are trademarks of Anthropic PBC.</sub>
 </div>
