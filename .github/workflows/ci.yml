@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate JSON manifests
+        run: |
+          echo "Validating plugin.json..."
+          jq empty .claude-plugin/plugin.json
+          echo "Validating marketplace.json..."
+          jq empty .claude-plugin/marketplace.json
+          echo "Validating hooks.json..."
+          jq empty hooks/hooks.json
+          echo "Validating test fixtures..."
+          jq empty test/sample-input.json
+          echo "✓ All JSON manifests are valid"
+
+      - name: Shellcheck — bin/devpilot
+        run: shellcheck -x bin/devpilot
+
+      - name: Shellcheck — scripts/setup.sh
+        run: shellcheck -x scripts/setup.sh
+
+      - name: Test — version command
+        run: |
+          chmod +x bin/devpilot
+          bin/devpilot version
+
+      - name: Test — help command
+        run: bin/devpilot help
+
+      - name: Test — render from sample input
+        run: cat test/sample-input.json | bin/devpilot render
+
+      - name: Test — demo command
+        run: bin/devpilot demo
+
+      - name: Test — demo stats
+        run: bin/devpilot demo stats
+
+      - name: Test — demo history
+        run: bin/devpilot demo history
+
+      - name: Test — setup script (dry-run verification)
+        run: |
+          chmod +x scripts/setup.sh
+          # Verify the script parses without errors
+          bash -n scripts/setup.sh
+          echo "✓ setup.sh syntax is valid"
+
+  validate-plugin:
+    name: Validate Plugin Structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Check required files exist
+        run: |
+          files=(
+            ".claude-plugin/plugin.json"
+            ".claude-plugin/marketplace.json"
+            "hooks/hooks.json"
+            "bin/devpilot"
+            "cli.js"
+            "commands/dps-setup.md"
+            "commands/dps-configure.md"
+            "commands/dps-demo.md"
+            "commands/dps-uninstall.md"
+            "scripts/setup.sh"
+            "LICENSE"
+            "README.md"
+            "CHANGELOG.md"
+            "package.json"
+          )
+          missing=0
+          for f in "${files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "✗ MISSING: $f"
+              missing=$((missing + 1))
+            else
+              echo "✓ $f"
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "ERROR: $missing required file(s) missing"
+            exit 1
+          fi
+          echo "✓ All required files present"
+
+      - name: Validate plugin.json required fields
+        run: |
+          jq -e '.name' .claude-plugin/plugin.json > /dev/null
+          jq -e '.version' .claude-plugin/plugin.json > /dev/null
+          jq -e '.description' .claude-plugin/plugin.json > /dev/null
+          echo "✓ plugin.json has all required fields"
+
+      - name: Validate marketplace.json structure
+        run: |
+          jq -e '.name' .claude-plugin/marketplace.json > /dev/null
+          jq -e '.plugins | length > 0' .claude-plugin/marketplace.json > /dev/null
+          echo "✓ marketplace.json has valid structure"
+
+      - name: Validate version consistency
+        run: |
+          plugin_ver=$(jq -r '.version' .claude-plugin/plugin.json)
+          market_ver=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          pkg_ver=$(jq -r '.version' package.json)
+          script_ver=$(grep -m1 'DPS_VERSION=' bin/devpilot | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          echo "plugin.json:      $plugin_ver"
+          echo "marketplace.json: $market_ver"
+          echo "package.json:     $pkg_ver"
+          echo "bin/devpilot:     $script_ver"
+
+          if [ "$plugin_ver" != "$market_ver" ]; then
+            echo "ERROR: plugin.json ($plugin_ver) != marketplace.json ($market_ver)"
+            exit 1
+          fi
+          if [ "$plugin_ver" != "$pkg_ver" ]; then
+            echo "ERROR: plugin.json ($plugin_ver) != package.json ($pkg_ver)"
+            exit 1
+          fi
+          if [ "$plugin_ver" != "$script_ver" ]; then
+            echo "ERROR: plugin.json ($plugin_ver) != bin/devpilot ($script_ver)"
+            exit 1
+          fi
+          echo "✓ All versions match: $plugin_ver"

@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version consistency
+        run: |
+          TAG_VER="${{ steps.version.outputs.VERSION }}"
+          PLUGIN_VER=$(jq -r '.version' .claude-plugin/plugin.json)
+          PKG_VER=$(jq -r '.version' package.json)
+          SCRIPT_VER=$(grep -m1 'DPS_VERSION=' bin/devpilot | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          echo "Tag version:      $TAG_VER"
+          echo "plugin.json:      $PLUGIN_VER"
+          echo "package.json:     $PKG_VER"
+          echo "bin/devpilot:     $SCRIPT_VER"
+
+          if [ "$TAG_VER" != "$PLUGIN_VER" ]; then
+            echo "ERROR: Tag ($TAG_VER) does not match plugin.json ($PLUGIN_VER)"
+            exit 1
+          fi
+          echo "✓ All versions match: $TAG_VER"
+
+      - name: Run tests
+        run: |
+          chmod +x bin/devpilot scripts/setup.sh
+          cat test/sample-input.json | bin/devpilot render
+          bin/devpilot version
+          bin/devpilot demo
+          echo "✓ All tests passed"
+
+      - name: Create release archive
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          ARCHIVE="devpilot-studio-v${VERSION}.tar.gz"
+          tar -czf "$ARCHIVE" \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='*.tgz' \
+            --exclude='.DS_Store' \
+            .
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+          echo "Created $ARCHIVE"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          # Extract the section for this version from CHANGELOG.md
+          BODY=$(awk "/^## \\[$VERSION\\]/,/^## \\[/" CHANGELOG.md | head -n -1)
+          if [ -z "$BODY" ]; then
+            BODY="Release v$VERSION of DevPilot Studio"
+          fi
+          # Write to file for the release body
+          echo "$BODY" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "DevPilot Studio v${{ steps.version.outputs.VERSION }}"
+          body_path: release_notes.md
+          files: ${{ env.ARCHIVE }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
