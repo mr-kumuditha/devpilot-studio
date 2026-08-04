@@ -1,0 +1,51 @@
+{
+  "name": "devpilot-studio",
+  "version": "1.0.0",
+  "description": "DevPilot Studio — A professional desktop utility for managing Claude Code workflows, AI development sessions, project status, MCP servers, prompts, Git repositories, and developer productivity.",
+  "bin": {
+    "dps": "cli.js",
+    "devpilot": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "bin/devpilot",
+    "NOTICE.md"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "keywords": [
+    "devpilot-studio",
+    "dps",
+    "devpilot",
+    "claude-code",
+    "statusline",
+    "status-line",
+    "cli",
+    "terminal",
+    "kumuditha-labs"
+  ],
+  "homepage": "https://github.com/mr-kumuditha/devpilot-studio#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mr-kumuditha/devpilot-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mr-kumuditha/devpilot-studio/issues",
+    "email": "dev@tharinda.dev"
+  },
+  "author": {
+    "name": "Kumuditha Tharinda Liyanage",
+    "email": "dev@tharinda.dev",
+    "url": "https://tharinda.dev"
+  },
+  "publishConfig": {
+    "tag": "latest",
+    "access": "public"
+  },
+  "license": "MIT"
+}
