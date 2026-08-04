@@ -272,15 +272,7 @@ You are free to use, modify, distribute, and commercially exploit the software, 
 
 ---
 
-## 18. Credits
-
-DevPilot Studio (`dps`) is a derivative work. The core status line rendering concepts and engine structure originated from **ccbar** (claude-control-center) by Lakpriya Senevirathna (MIT Licensed). DevPilot Studio significantly extends the architecture with interactive configurations, new metrics, plugin manifests, automated installations, and complete rebranding. 
-
-See [NOTICE.md](NOTICE.md) for full legal attribution.
-
----
-
-## 19. Support
+## 18. Support
 
 Having trouble? We're here to help!
 - **Bug Reports:** Open an issue on [GitHub Issues](https://github.com/mr-kumuditha/devpilot-studio/issues).
