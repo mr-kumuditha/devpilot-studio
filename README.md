@@ -1,12 +1,14 @@
 <div align="center">
 
-  <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="480" />
-
-  <h1>DevPilot Studio (DPS)</h1>
-
-  <p>
-    <strong>A Professional Desktop Utility & CLI Engine for AI Workflows, Session Tracking, MCP Management, and Developer Productivity</strong>
-  </p>
+  <div style="display:flex;align-items:center;gap:16px;justify-content:center;padding:12px 0;background:#f6f8fa;border-radius:8px">
+    <img src="assets/dps-logo-horizontal.png" alt="DevPilot Studio Logo" width="140" height="36" style="object-fit:contain" />
+    <div style="text-align:left">
+      <h1 style="margin:0;font-size:20px">DevPilot Studio (DPS)</h1>
+      <p style="margin:4px 0 0;font-size:12px;color:#555">
+        <strong>A Professional Desktop Utility & CLI Engine for AI Workflows, Session Tracking, MCP Management, and Developer Productivity</strong>
+      </p>
+    </div>
+  </div>
 
   <p>
     <a href="https://www.npmjs.com/package/devpilot-studio"><img src="https://img.shields.io/npm/v/devpilot-studio?style=for-the-badge&color=007ACC&logo=npm&logoColor=white" alt="NPM Version" /></a>
@@ -31,7 +33,7 @@
 ---
 
 > [!IMPORTANT]
-> **DevPilot Studio** is built from the ground up for developers who demand complete visibility into their AI sessions, rate limits, context windows, and workspace productivity — delivered with zero runtime dependencies and 100% offline privacy.
+> **DevPilot Studio** is built from the ground up for developers who demand complete visibility into their AI sessions, rate limits, context windows, and workspace productivity — delivered with [...]
 
 ---
 
@@ -79,7 +81,7 @@ dps gallery
 </div>
 
 ### 🖥️ Real-Time Terminal Status Bar
-Displays your active AI model, effort level, workspace directory, and live usage progress bars for context window capacity, 5-hour rate limits, and 7-day plan quotas directly inside your terminal session.
+Displays your active AI model, effort level, workspace directory, and live usage progress bars for context window capacity, 5-hour rate limits, and 7-day plan quotas directly inside your terminal sess[...]
 
 ### ⚠️ Intelligent Burn-Rate Velocity Alerts
 Calculates your current token burn rate and alerts you (`⚠`) when session velocity projects hitting quota limits before reset countdowns expire.
@@ -91,7 +93,7 @@ Shows comprehensive session telemetry including exact token counts (`84k / 200k`
 Generates 8-level terminal sparkline charts (`▃▆▇▄▅▅▅`) and daily peak rollups without requiring external database servers or background daemons.
 
 ### 🎨 Custom Color Themes & Preset Gallery (`dps gallery`)
-Includes `default` (subtle dimmed tones), `mono` (clean grayscale), and `vivid` (high-contrast vibrant colors) with customizable unicode blocks (`█░`), shaded characters (`▓░`), or ASCII bars (`=-`).
+Includes `default` (subtle dimmed tones), `mono` (clean grayscale), and `vivid` (high-contrast vibrant colors) with customizable unicode blocks (`█░`), shaded characters (`▓░`), or ASCII bars [...]
 
 ### 🛡️ Zero Dependencies & 100% Offline Privacy
 Operates completely offline with zero telemetry, zero analytics tracking, and zero npm runtime dependencies. All preferences and history remain strictly on your machine.
@@ -187,7 +189,7 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/devpilot/config
 ## 🔒 Security & Privacy
 
 > [!NOTE]
-> DevPilot Studio is engineered with a strict **privacy-first architecture**. It makes **zero outbound network requests** during status line rendering and contains **zero telemetry or analytics tracking**. All history logs and configuration data reside exclusively under your local home directory.
+> DevPilot Studio is engineered with a strict **privacy-first architecture**. It makes **zero outbound network requests** during status line rendering and contains **zero telemetry or analytics t[...]
 
 Review the full [Security Audit Report](reports/security-audit.md).
 
