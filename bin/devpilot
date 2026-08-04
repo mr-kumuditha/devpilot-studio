@@ -1,0 +1,1096 @@
+#!/usr/bin/env bash
+#
+# DevPilot Studio (dps / devpilot) — A professional desktop utility for managing
+# Claude Code workflows, AI development sessions, project status, MCP servers,
+# prompts, Git repositories, and developer productivity.
+#
+# Copyright (c) 2026 Kumuditha Tharinda Liyanage (Kumuditha Labs)
+#
+# Renders (across two lines): an optional org badge, the model name, the
+# effort level, the workspace directory, and colored usage bars for the
+# context window, the 5-hour rate limit, and the 7-day rate limit — each
+# with a reset countdown.
+#
+# Usage:
+#   dps render        Read status JSON on stdin and print the status bar.
+#   dps stats         Show an expanded usage panel from the latest render.
+#   dps history       Show usage trends from recorded snapshots.
+#   dps config        Run the interactive setup wizard.
+#   dps gallery       Browse preset looks and apply one.
+#   dps demo          Preview with sample data (also: demo stats, demo history).
+#   dps install       Copy devpilot to ~/.local/bin and wire into Claude Code.
+#   dps uninstall     Remove devpilot status line wiring from settings.
+#   dps version       Print the version.
+#   dps help          Show this help.
+#
+# Home: https://github.com/mr-kumuditha/devpilot-studio
+# License: MIT (see LICENSE and NOTICE.md)
+
+DPS_VERSION="1.0.0"
+
+# ----------------------------------------------------------------------------
+# Configuration & State Paths
+# ----------------------------------------------------------------------------
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/devpilot"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/devpilot"
+CACHE_FILE="$CACHE_DIR/last.json"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/devpilot"
+HISTORY_FILE="$STATE_DIR/history.tsv"
+
+SETTINGS_FILE="$HOME/.claude/settings.json"
+INSTALL_BIN="$HOME/.local/bin/devpilot"
+
+# ----------------------------------------------------------------------------
+# Config loading
+# ----------------------------------------------------------------------------
+load_config() {
+  if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CONFIG_FILE"
+  fi
+
+  DPS_ORG="${DPS_ORG-}"
+  DPS_THEME="${DPS_THEME:-default}"
+  DPS_BAR_WIDTH="${DPS_BAR_WIDTH:-10}"
+  DPS_BAR_FILLED="${DPS_BAR_FILLED:-█}"
+  DPS_BAR_EMPTY="${DPS_BAR_EMPTY:-░}"
+  DPS_SHOW_EFFORT="${DPS_SHOW_EFFORT:-1}"
+  DPS_SHOW_CTX="${DPS_SHOW_CTX:-1}"
+  DPS_SHOW_5H="${DPS_SHOW_5H:-1}"
+  DPS_SHOW_7D="${DPS_SHOW_7D:-1}"
+  DPS_SHOW_OVERAGE="${DPS_SHOW_OVERAGE:-0}"
+  DPS_SHOW_COST="${DPS_SHOW_COST:-0}"
+  DPS_SHOW_BURN="${DPS_SHOW_BURN:-1}"
+  DPS_HISTORY="${DPS_HISTORY:-1}"
+}
+
+# ----------------------------------------------------------------------------
+# Themes
+# ----------------------------------------------------------------------------
+RESET='\033[0m'
+
+apply_theme() {
+  local theme="$1"
+  case "$theme" in
+    mono)
+      C_MODEL='\033[2m'
+      C_ARROW='\033[2;37m'
+      C_DIR='\033[0;37m'
+      C_ORG='\033[1;37m'
+      C_BRACKET='\033[2;37m'
+      C_LABEL='\033[2;37m'
+      C_RESETTXT='\033[2m'
+      BAR_LOW='\033[2;37m'; BAR_MID='\033[0;37m'; BAR_HIGH='\033[1;37m'
+      E_LOW='\033[2;37m'; E_MED='\033[0;37m'; E_HIGH='\033[0;37m'
+      E_XHIGH='\033[1;37m'; E_MAX='\033[1;37m'; E_DEFAULT='\033[2m'
+      ;;
+    vivid)
+      C_MODEL='\033[1;37m'
+      C_ARROW='\033[0;90m'
+      C_DIR='\033[1;36m'
+      C_ORG='\033[1;31m'
+      C_BRACKET='\033[0;90m'
+      C_LABEL='\033[0;90m'
+      C_RESETTXT='\033[0;90m'
+      BAR_LOW='\033[1;32m'; BAR_MID='\033[1;33m'; BAR_HIGH='\033[1;31m'
+      E_LOW='\033[1;32m'; E_MED='\033[1;36m'; E_HIGH='\033[1;33m'
+      E_XHIGH='\033[1;35m'; E_MAX='\033[1;31m'; E_DEFAULT='\033[1;37m'
+      ;;
+    *) # default
+      C_MODEL='\033[2m'
+      C_ARROW='\033[2;37m'
+      C_DIR='\033[2;36m'
+      C_ORG='\033[1;31m'
+      C_BRACKET='\033[2;37m'
+      C_LABEL='\033[2;37m'
+      C_RESETTXT='\033[2m'
+      BAR_LOW='\033[0;32m'; BAR_MID='\033[2;33m'; BAR_HIGH='\033[0;31m'
+      E_LOW='\033[0;32m'; E_MED='\033[2;36m'; E_HIGH='\033[2;33m'
+      E_XHIGH='\033[2;35m'; E_MAX='\033[0;31m'; E_DEFAULT='\033[2m'
+      ;;
+  esac
+}
+
+# ----------------------------------------------------------------------------
+# Render Helpers
+# ----------------------------------------------------------------------------
+render_bar() {
+  local pct_raw="$1"
+  local pct
+  pct=$(printf '%.0f' "$pct_raw" 2>/dev/null || echo 0)
+  [ "$pct" -gt 100 ] && pct=100
+  [ "$pct" -lt 0 ] && pct=0
+
+  local color="$BAR_LOW"
+  if [ "$pct" -ge 80 ]; then
+    color="$BAR_HIGH"
+  elif [ "$pct" -ge 50 ]; then
+    color="$BAR_MID"
+  fi
+
+  local filled=$(( pct * DPS_BAR_WIDTH / 100 ))
+  local empty=$(( DPS_BAR_WIDTH - filled ))
+  local bar="" i
+  for ((i = 0; i < filled; i++)); do bar="${bar}${DPS_BAR_FILLED}"; done
+  for ((i = 0; i < empty; i++)); do bar="${bar}${DPS_BAR_EMPTY}"; done
+
+  printf "%b" "${color}${bar}${RESET}"
+}
+
+render_reset() {
+  local resets_at="$1"
+  local now diff
+  now=$(date +%s)
+  diff=$(( resets_at - now ))
+  if [ "$diff" -le 0 ]; then
+    printf "now"
+    return
+  fi
+  local days=$(( diff / 86400 ))
+  local hours=$(( (diff % 86400) / 3600 ))
+  local mins=$(( (diff % 3600) / 60 ))
+  if [ "$days" -gt 0 ]; then
+    printf "%dd %dh" "$days" "$hours"
+  elif [ "$hours" -gt 0 ]; then
+    printf "%dh %dm" "$hours" "$mins"
+  else
+    printf "%dm" "$mins"
+  fi
+}
+
+fmt_dur() {
+  local diff="$1"
+  [ "$diff" -le 0 ] 2>/dev/null && { printf "0m"; return; }
+  local days=$(( diff / 86400 ))
+  local hours=$(( (diff % 86400) / 3600 ))
+  local mins=$(( (diff % 3600) / 60 ))
+  if [ "$days" -gt 0 ]; then
+    printf "%dd %dh" "$days" "$hours"
+  elif [ "$hours" -gt 0 ]; then
+    printf "%dh %dm" "$hours" "$mins"
+  else
+    printf "%dm" "$mins"
+  fi
+}
+
+render_burn() {
+  local pct_raw="$1" resets_at="$2" win="$3"
+  local pct now start elapsed ttr eta rem
+  pct=$(printf '%.0f' "$pct_raw" 2>/dev/null || echo 0)
+  [ "$pct" -le 0 ] && return
+  [ "$pct" -ge 100 ] && return
+  now=$(date +%s)
+  start=$(( resets_at - win ))
+  elapsed=$(( now - start ))
+  [ "$elapsed" -le 0 ] && return
+  ttr=$(( resets_at - now ))
+  [ "$ttr" -le 0 ] && return
+  rem=$(( 100 - pct ))
+  eta=$(( rem * elapsed / pct ))
+  if [ "$eta" -lt "$ttr" ]; then
+    printf " %b⚠ %s%b" "$BAR_HIGH" "$(fmt_dur "$eta")" "$RESET"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# render — main status line rendering
+# ----------------------------------------------------------------------------
+cmd_render() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "devpilot: jq not found — run 'dps config' or install jq\n"
+    return 0
+  fi
+
+  load_config
+  apply_theme "$DPS_THEME"
+
+  local input
+  input=$(cat)
+
+  if [ -n "$input" ]; then
+    local now_ts
+    now_ts=$(date +%s)
+    mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s' "$input" >"$CACHE_FILE" 2>/dev/null
+    [ "$DPS_HISTORY" = "1" ] && _history_log "$input" "$now_ts"
+  fi
+
+  _render_status "$input"
+}
+
+_history_log() {
+  local input="$1" now="$2" row last_t n
+  row=$(printf '%s' "$input" | jq -r '[
+    (.session_id // "-"),
+    (.model.display_name // "-"),
+    (.cost.total_cost_usd // ""),
+    (.context_window.used_percentage // ""),
+    (.rate_limits.five_hour.used_percentage // ""),
+    (.rate_limits.five_hour.resets_at // ""),
+    (.rate_limits.seven_day.used_percentage // ""),
+    (.rate_limits.seven_day.resets_at // "")
+  ] | @tsv' 2>/dev/null) || return
+  [ -z "$row" ] && return
+
+  mkdir -p "$STATE_DIR" 2>/dev/null || return
+
+  if [ -f "$HISTORY_FILE" ]; then
+    last_t=$(tail -n1 "$HISTORY_FILE" 2>/dev/null | cut -f1)
+    case "$last_t" in ''|*[!0-9]*) last_t=0 ;; esac
+    [ $(( now - last_t )) -lt 60 ] && return
+  fi
+
+  printf '%s\t%s\n' "$now" "$row" >>"$HISTORY_FILE" 2>/dev/null || return
+
+  n=$(wc -l <"$HISTORY_FILE" 2>/dev/null | tr -d ' ')
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  if [ "$n" -gt 22000 ]; then
+    tail -n 20000 "$HISTORY_FILE" >"$HISTORY_FILE.tmp" 2>/dev/null &&
+      mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
+  fi
+}
+
+_render_status() {
+  local input="$1"
+
+  local model cwd dir effort
+  model=$(printf '%s' "$input" | jq -r '.model.display_name // "?"')
+  cwd=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // ""')
+  dir=$(basename "$cwd" 2>/dev/null)
+  effort=$(printf '%s' "$input" | jq -r '.effort.level // empty')
+
+  local ctx_pct five_pct five_reset week_pct week_reset over_pct over_reset cost has_rl
+  ctx_pct=$(printf '%s' "$input" | jq -r '.context_window.used_percentage // empty')
+  five_pct=$(printf '%s' "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
+  five_reset=$(printf '%s' "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+  week_pct=$(printf '%s' "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+  week_reset=$(printf '%s' "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+  over_pct=$(printf '%s' "$input" | jq -r '.rate_limits.overage.used_percentage // empty')
+  over_reset=$(printf '%s' "$input" | jq -r '.rate_limits.overage.resets_at // empty')
+  cost=$(printf '%s' "$input" | jq -r '.cost.total_cost_usd // empty')
+  has_rl=$(printf '%s' "$input" | jq -r 'if .rate_limits then "1" else "" end')
+
+  local inner="${C_MODEL}${model}${RESET}"
+
+  if [ "$DPS_SHOW_EFFORT" = "1" ] && [ -n "$effort" ]; then
+    local ecolor
+    case "$effort" in
+      low) ecolor="$E_LOW" ;;
+      medium) ecolor="$E_MED" ;;
+      high) ecolor="$E_HIGH" ;;
+      xhigh) ecolor="$E_XHIGH" ;;
+      max) ecolor="$E_MAX" ;;
+      *) ecolor="$E_DEFAULT" ;;
+    esac
+    inner="${inner} ${ecolor}${effort}${RESET}"
+  fi
+
+  if [ -n "$dir" ]; then
+    inner="${inner} ${C_ARROW}->${RESET} ${C_DIR}${dir}${RESET}"
+  fi
+
+  local line1
+  if [ -n "$DPS_ORG" ]; then
+    line1="${C_ORG}${DPS_ORG}${RESET} ${C_BRACKET}[${RESET}${inner}${C_BRACKET}]${RESET}"
+  else
+    line1="$inner"
+  fi
+
+  if [ "$DPS_SHOW_COST" = "1" ] && [ -n "$cost" ]; then
+    line1="${line1} ${C_LABEL}\$$(printf '%.2f' "$cost")${RESET}"
+  fi
+
+  local line2="" seg bar
+  if [ "$DPS_SHOW_CTX" = "1" ] && [ -n "$ctx_pct" ]; then
+    bar=$(render_bar "$ctx_pct")
+    line2="${C_LABEL}ctx${RESET} ${bar} $(printf '%.0f' "$ctx_pct")%"
+  fi
+
+  if [ "$DPS_SHOW_5H" = "1" ]; then
+    if [ -n "$five_pct" ]; then
+      bar=$(render_bar "$five_pct")
+      seg="${C_LABEL}5h${RESET}  ${bar} $(printf '%.0f' "$five_pct")%"
+      if [ -n "$five_reset" ]; then
+        seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$five_reset")${C_RESETTXT})${RESET}"
+      fi
+      if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$five_reset" ]; then
+        seg="${seg}$(render_burn "$five_pct" "$five_reset" $((5 * 3600)))"
+      fi
+      if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
+    elif [ -n "$has_rl" ]; then
+      seg="${C_LABEL}5h${RESET}  ${C_RESETTXT}idle${RESET}"
+      if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
+    fi
+  fi
+
+  if [ "$DPS_SHOW_7D" = "1" ] && [ -n "$week_pct" ]; then
+    bar=$(render_bar "$week_pct")
+    seg="${C_LABEL}7d${RESET}  ${bar} $(printf '%.0f' "$week_pct")%"
+    if [ -n "$week_reset" ]; then
+      seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$week_reset")${C_RESETTXT})${RESET}"
+    fi
+    if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$week_reset" ]; then
+      seg="${seg}$(render_burn "$week_pct" "$week_reset" $((7 * 86400)))"
+    fi
+    if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
+  fi
+
+  if [ "$DPS_SHOW_OVERAGE" = "1" ] && [ -n "$over_pct" ]; then
+    bar=$(render_bar "$over_pct")
+    seg="${C_LABEL}over${RESET} ${bar} $(printf '%.0f' "$over_pct")%"
+    if [ -n "$over_reset" ]; then
+      seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$over_reset")${C_RESETTXT})${RESET}"
+    fi
+    if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
+  fi
+
+  printf "%b" "$line1"
+  [ -n "$line2" ] && printf "\n%b" "$line2"
+  printf "\n"
+}
+
+# ----------------------------------------------------------------------------
+# stats
+# ----------------------------------------------------------------------------
+_humantokens() {
+  local n="$1"
+  case "$n" in ''|*[!0-9]*) printf "?"; return ;; esac
+  if [ "$n" -ge 1000000 ]; then
+    printf "%d.%dM" $(( n / 1000000 )) $(( (n % 1000000) / 100000 ))
+  elif [ "$n" -ge 1000 ]; then
+    printf "%dk" $(( n / 1000 ))
+  else
+    printf "%d" "$n"
+  fi
+}
+
+_age_str() {
+  local diff="$1"
+  if [ "$diff" -lt 60 ] 2>/dev/null; then printf "%ds" "$diff"; else fmt_dur "$diff"; fi
+}
+
+_pace_desc() {
+  local pct_raw="$1" resets_at="$2" win="$3"
+  local pct now start elapsed ttr eta rem
+  pct=$(printf '%.0f' "$pct_raw" 2>/dev/null || echo 0)
+  [ "$pct" -le 0 ] && return
+  now=$(date +%s)
+  start=$(( resets_at - win ))
+  elapsed=$(( now - start ))
+  [ "$elapsed" -le 0 ] && return
+  ttr=$(( resets_at - now ))
+  [ "$ttr" -le 0 ] && return
+  if [ "$pct" -ge 100 ]; then printf "limit reached"; return; fi
+  rem=$(( 100 - pct ))
+  eta=$(( rem * elapsed / pct ))
+  if [ "$eta" -lt "$ttr" ]; then
+    printf "hits limit in ~%s" "$(fmt_dur "$eta")"
+  else
+    printf "on track"
+  fi
+}
+
+_stat_row() {
+  printf "  %b%-9s%b %b\n" "$C_LABEL" "$1" "$RESET" "$2"
+}
+
+cmd_stats() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "devpilot: jq not found — install jq to use 'dps stats' (see README)\n"
+    return 0
+  fi
+
+  load_config
+  apply_theme "$DPS_THEME"
+
+  local input="" age_note=""
+  if [ ! -t 0 ]; then
+    input=$(cat)
+  fi
+  if [ -z "$input" ]; then
+    if [ -f "$CACHE_FILE" ]; then
+      input=$(cat "$CACHE_FILE")
+      local mtime now
+      mtime=$(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null)
+      if [ -n "$mtime" ]; then
+        now=$(date +%s)
+        age_note="$(_age_str $(( now - mtime ))) ago"
+      fi
+    fi
+  fi
+
+  if [ -z "$input" ]; then
+    _err "no usage data yet — DevPilot Studio captures it when status line redraws."
+    _err "open a Claude Code session, then run 'dps stats' again."
+    return 1
+  fi
+
+  _stats_panel "$input" "$age_note"
+}
+
+_stats_panel() {
+  local input="$1" age_note="$2"
+  local model effort cost
+  local ctx_pct ctx_size five_pct five_reset week_pct week_reset over_pct over_reset has_rl
+  model=$(printf '%s' "$input" | jq -r '.model.display_name // "?"')
+  effort=$(printf '%s' "$input" | jq -r '.effort.level // empty')
+  cost=$(printf '%s' "$input" | jq -r '.cost.total_cost_usd // empty')
+  ctx_pct=$(printf '%s' "$input" | jq -r '.context_window.used_percentage // empty')
+  ctx_size=$(printf '%s' "$input" | jq -r '.context_window.context_window_size // empty')
+  five_pct=$(printf '%s' "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
+  five_reset=$(printf '%s' "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+  week_pct=$(printf '%s' "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+  week_reset=$(printf '%s' "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+  over_pct=$(printf '%s' "$input" | jq -r '.rate_limits.overage.used_percentage // empty')
+  over_reset=$(printf '%s' "$input" | jq -r '.rate_limits.overage.resets_at // empty')
+  has_rl=$(printf '%s' "$input" | jq -r 'if .rate_limits then "1" else "" end')
+
+  local bold='\033[1m'
+  printf "\n%bDevPilot Studio%b — usage stats\n\n" "$bold" "$RESET"
+
+  local mval="$model"
+  [ -n "$effort" ] && mval="$mval ${C_RESETTXT}(${effort})${RESET}"
+  _stat_row "Model" "$mval"
+
+  if [ -n "$five_pct" ]; then
+    local sbar sval pace
+    sbar=$(render_bar "$five_pct")
+    sval="${sbar} $(printf '%.0f' "$five_pct")%"
+    [ -n "$five_reset" ] && sval="${sval}   ${C_RESETTXT}resets in ${RESET}$(render_reset "$five_reset")"
+    _stat_row "Session" "$sval"
+    if [ -n "$five_reset" ]; then
+      pace=$(_pace_desc "$five_pct" "$five_reset" $((5 * 3600)))
+      [ -n "$pace" ] && _stat_row "" "${C_RESETTXT}${pace}${RESET}"
+    fi
+  elif [ -n "$has_rl" ]; then
+    _stat_row "Session" "${C_RESETTXT}idle — window not started${RESET}"
+  fi
+
+  if [ -n "$week_pct" ]; then
+    local wbar wval
+    wbar=$(render_bar "$week_pct")
+    wval="${wbar} $(printf '%.0f' "$week_pct")%"
+    [ -n "$week_reset" ] && wval="${wval}   ${C_RESETTXT}resets in ${RESET}$(render_reset "$week_reset")"
+    _stat_row "Weekly" "$wval"
+  fi
+
+  if [ -n "$over_pct" ]; then
+    local obar oval
+    obar=$(render_bar "$over_pct")
+    oval="${obar} $(printf '%.0f' "$over_pct")%"
+    [ -n "$over_reset" ] && oval="${oval}   ${C_RESETTXT}resets in ${RESET}$(render_reset "$over_reset")"
+    _stat_row "Overage" "$oval"
+  fi
+
+  if [ -n "$ctx_pct" ]; then
+    local cbar cval used
+    cbar=$(render_bar "$ctx_pct")
+    cval="${cbar} $(printf '%.0f' "$ctx_pct")%"
+    if [ -n "$ctx_size" ]; then
+      used=$(( ctx_size * $(printf '%.0f' "$ctx_pct") / 100 ))
+      cval="${cval}   ${C_RESETTXT}$(_humantokens "$used") / $(_humantokens "$ctx_size")${RESET}"
+    fi
+    _stat_row "Context" "$cval"
+  fi
+
+  [ -n "$cost" ] && _stat_row "Cost" "\$$(printf '%.2f' "$cost")"
+  [ -n "$age_note" ] && _stat_row "Updated" "${C_RESETTXT}${age_note}${RESET}"
+  printf "\n"
+}
+
+# ----------------------------------------------------------------------------
+# history
+# ----------------------------------------------------------------------------
+_date_fmt() {
+  date -r "$1" +"$2" 2>/dev/null || date -d "@$1" +"$2" 2>/dev/null
+}
+
+_sparkline() {
+  local ticks=(▁ ▂ ▃ ▄ ▅ ▆ ▇ █) out="" v idx
+  for v in $1; do
+    v=$(printf '%.0f' "$v" 2>/dev/null || echo 0)
+    [ "$v" -lt 0 ] && v=0
+    [ "$v" -gt 100 ] && v=100
+    idx=$(( v * 7 / 100 ))
+    out="${out}${ticks[$idx]}"
+  done
+  printf '%s' "$out"
+}
+
+cmd_history() {
+  load_config
+  apply_theme "$DPS_THEME"
+
+  local src="${1:-$HISTORY_FILE}"
+
+  if [ ! -s "$src" ]; then
+    _err "no history yet — DevPilot Studio records usage as status lines refresh."
+    _err "use a Claude Code session for a while, then run 'dps history'."
+    return 1
+  fi
+
+  local now days cutoff
+  now=$(date +%s)
+  days=7
+  cutoff=$(( now - days * 86400 ))
+
+  local tzoff sign hh mm off_sec
+  tzoff=$(date +%z 2>/dev/null)
+  case "$tzoff" in
+    [+-][0-9][0-9][0-9][0-9])
+      sign=${tzoff%${tzoff#?}}; hh=${tzoff:1:2}; mm=${tzoff:3:2}
+      off_sec=$(( 10#$hh * 3600 + 10#$mm * 60 ))
+      [ "$sign" = "-" ] && off_sec=$(( -off_sec ))
+      ;;
+    *) off_sec=0 ;;
+  esac
+
+  local rows
+  rows=$(awk -F'\t' -v off="$off_sec" -v cutoff="$cutoff" '
+    ($1 + 0) >= cutoff {
+      t = $1 + 0; sid = $2; cost = $4 + 0; h5 = $6 + 0; h7 = $8 + 0
+      di = int((t + off) / 86400)
+      if (h5 > p5[di]) p5[di] = h5
+      if (h7 > p7[di]) p7[di] = h7
+      cnt[di]++
+      k = di SUBSEP sid
+      if (cost >= sc[k]) { sc[k] = cost; sd[k] = di }
+    }
+    END {
+      for (k in sc) dc[sd[k]] += sc[k]
+      for (di in cnt) printf "%s %.0f %.0f %.2f %d\n", di, p5[di], p7[di], dc[di], cnt[di]
+    }
+  ' "$src" | sort -n)
+
+  [ -z "$rows" ] && { _err "no samples in the last $days days."; return 1; }
+
+  local bold='\033[1m'
+  printf "\n%bDevPilot Studio%b — history (last %d days)\n\n" "$bold" "$RESET" "$days"
+
+  local last h5_now h7_now last_sid
+  last=$(tail -n1 "$src")
+  last_sid=$(printf '%s' "$last" | cut -f2)
+  h5_now=$(printf '%s' "$last" | cut -f6)
+  h7_now=$(printf '%s' "$last" | cut -f8)
+
+  local spark_vals=""
+  local di p5 p7 dc n
+  while read -r di p5 p7 dc n; do
+    [ -z "$di" ] && continue
+    spark_vals="$spark_vals $p5"
+  done <<EOF
+$rows
+EOF
+  printf "  %b5h peak%b   %b%s%b" "$C_LABEL" "$RESET" "$BAR_MID" "$(_sparkline "$spark_vals")" "$RESET"
+  [ -n "$h5_now" ] && printf "   now %s%%" "$(printf '%.0f' "$h5_now")"
+  printf "\n"
+  if [ -n "$h7_now" ]; then
+    printf "  %b7d%b        %b %s%%\n" "$C_LABEL" "$RESET" "$(render_bar "$h7_now")" "$(printf '%.0f' "$h7_now")"
+  fi
+  printf "\n"
+
+  printf "  %b%-9s %7s %7s %9s%b\n" "$C_LABEL" "Date" "5h peak" "7d peak" "~cost" "$RESET"
+  local -a LINES=()
+  while IFS= read -r ln; do [ -n "$ln" ] && LINES+=("$ln"); done <<EOF
+$rows
+EOF
+  local i label mid
+  for (( i = ${#LINES[@]} - 1; i >= 0; i-- )); do
+    set -- ${LINES[$i]}
+    di=$1; p5=$2; p7=$3; dc=$4
+    mid=$(( di * 86400 - off_sec + 43200 ))
+    label=$(_date_fmt "$mid" "%b %d")
+    printf "  %-9s %6s%% %6s%% %9s\n" "$label" "$p5" "$p7" "\$$dc"
+  done
+
+  local burn
+  burn=$(awk -F'\t' -v now="$now" -v sid="$last_sid" '
+    ($1 + 0) >= now - 3600 && $2 == sid {
+      t = $1 + 0; h = $6 + 0
+      if (!seen) { t0 = t; h0 = h; seen = 1 }
+      t1 = t; h1 = h
+    }
+    END {
+      if (seen && t1 > t0 && h1 >= h0) printf "%.1f", (h1 - h0) / ((t1 - t0) / 3600.0)
+    }
+  ' "$src")
+  if [ -n "$burn" ] && [ -n "$h5_now" ]; then
+    local rate_int eta_sec
+    rate_int=$(printf '%.0f' "$burn")
+    printf "\n  %bBurn (last hr)%b  ~%s%%/h" "$C_LABEL" "$RESET" "$rate_int"
+    if [ "$rate_int" -gt 0 ]; then
+      eta_sec=$(awk -v r="$burn" -v h="$h5_now" 'BEGIN { if (r > 0 && h < 100) printf "%d", (100 - h) / r * 3600 }')
+      [ -n "$eta_sec" ] && [ "$eta_sec" -gt 0 ] && printf " %b→ hits 5h limit in ~%s%b" "$C_RESETTXT" "$(fmt_dur "$eta_sec")" "$RESET"
+    fi
+    printf "\n"
+  fi
+  printf "\n"
+}
+
+# ----------------------------------------------------------------------------
+# demo
+# ----------------------------------------------------------------------------
+_demo_json() {
+  local now five week
+  now=$(date +%s)
+  five=$(( now + 2 * 3600 + 15 * 60 ))
+  week=$(( now + 3 * 86400 + 4 * 3600 ))
+  cat <<EOF
+{
+  "session_id": "demo",
+  "model": { "display_name": "Claude 3.7 Sonnet" },
+  "workspace": { "current_dir": "/Users/you/dev/devpilot-studio" },
+  "effort": { "level": "high" },
+  "cost": { "total_cost_usd": 0.42 },
+  "context_window": { "used_percentage": 42, "context_window_size": 200000 },
+  "rate_limits": {
+    "five_hour": { "used_percentage": 63, "resets_at": $five },
+    "seven_day": { "used_percentage": 88, "resets_at": $week }
+  }
+}
+EOF
+}
+
+cmd_demo() {
+  case "${1:-}" in
+    stats)         _demo_stats ;;
+    history|hist)  _demo_history ;;
+    "")            _demo_statusline ;;
+    *)
+      _err "unknown demo '$1' — try: dps demo [stats|history]"
+      return 2
+      ;;
+  esac
+}
+
+_demo_statusline() {
+  local dim='\033[2m' accent='\033[1;36m' reset='\033[0m'
+  local rule='────────────────────────────────────────────────────────────'
+  printf "\n%bDevPilot Studio status bar preview:%b\n\n" "$dim" "$reset"
+  printf "%b%s%b\n" "$dim" "$rule" "$reset"
+  printf " %b❯%b add multi-provider support to settings\n" "$accent" "$reset"
+  printf "%b%s%b\n" "$dim" "$rule" "$reset"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    _demo_json | cmd_render
+  else
+    load_config
+    [ -z "$DPS_ORG" ] && DPS_ORG="Kumuditha Labs"
+    apply_theme "$DPS_THEME"
+    _render_status "$(_demo_json)"
+  fi
+  printf "\n"
+}
+
+_demo_stats() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "devpilot: jq not found — install jq to use 'dps demo stats'\n"
+    return 0
+  fi
+  local dim='\033[2m' reset='\033[0m'
+  printf "\n%b'dps stats' sample output:%b\n" "$dim" "$reset"
+  load_config
+  apply_theme "$DPS_THEME"
+  _stats_panel "$(_demo_json)" "just now"
+}
+
+_demo_history() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "devpilot: jq not found — install jq to use 'dps demo history'\n"
+    return 0
+  fi
+  local dim='\033[2m' reset='\033[0m'
+  printf "\n%b'dps history' sample output:%b\n" "$dim" "$reset"
+
+  local tmp now
+  tmp=$(mktemp 2>/dev/null) || tmp="${TMPDIR:-/tmp}/dps-demo-hist.$$"
+  now=$(date +%s)
+
+  awk -v now="$now" 'BEGIN {
+    OFS = "\t"
+    np = split("40 80 91 55 63 70 63", peak, " ")
+    nc = split("2.54 2.70 3.32 3.52 3.46 3.44 2.64", dc, " ")
+    for (d = 6; d >= 0; d--) {
+      idx = 7 - d
+      day = now - d * 86400
+      sid = "demo-" idx
+      target = peak[idx] + 0
+      h7 = 80 + (6 - d)
+      for (i = 0; i < 5; i++) {
+        if (d == 0) t = now - (4 - i) * 900
+        else t = day - (4 - i) * 1800
+        h5 = int(target * (i + 1) / 5)
+        cost = dc[idx] * (i + 1) / 5
+        printf "%d\t%s\tClaude 3.7 Sonnet\t%.4f\t%d\t%d\t%d\t%d\t%d\n", \
+          t, sid, cost, 42, h5, day + 3600, h7, day + 3 * 86400
+      }
+    }
+  }' >"$tmp"
+
+  cmd_history "$tmp"
+  rm -f "$tmp"
+}
+
+# ----------------------------------------------------------------------------
+# gallery
+# ----------------------------------------------------------------------------
+DPS_PRESETS='Default blocks|default|10|█|░
+Mono blocks|mono|10|█|░
+Vivid blocks|vivid|12|█|░
+Default shaded|default|10|▓|░
+Vivid squares|vivid|12|■|□
+Mono ascii|mono|14|=|-'
+
+cmd_gallery() {
+  if ! command -v jq >/dev/null 2>&1; then
+    _err "jq not found — install jq to preview gallery"
+    return 1
+  fi
+
+  local bold='\033[1m' dim='\033[2m'
+  local sample
+  sample=$(_demo_json)
+
+  DPS_ORG="Kumuditha Labs"
+  DPS_SHOW_EFFORT=1; DPS_SHOW_CTX=1; DPS_SHOW_5H=1; DPS_SHOW_7D=1
+  DPS_SHOW_COST=1; DPS_SHOW_BURN=0; DPS_SHOW_OVERAGE=1
+
+  printf "%b\n\n" "${bold}DevPilot Studio Gallery${RESET} — preset looks"
+
+  local i=0 name theme width filled empty
+  while IFS='|' read -r name theme width filled empty; do
+    [ -z "$name" ] && continue
+    i=$(( i + 1 ))
+    DPS_THEME="$theme"; DPS_BAR_WIDTH="$width"
+    DPS_BAR_FILLED="$filled"; DPS_BAR_EMPTY="$empty"
+    apply_theme "$theme"
+    printf "  %d) %s\n" "$i" "$name"
+    _render_status "$sample" | sed 's/^/     /'
+    printf "\n"
+  done <<EOF
+$DPS_PRESETS
+EOF
+
+  printf "%b\n" "${dim}Run \`dps config\` to customize themes & segments.${RESET}"
+
+  if tty_ok; then
+    local choice
+    choice=$(ask "Apply preset? [1-$i, Enter to skip]" "")
+    case "$choice" in
+      "")          _say "Skipped — unchanged." ;;
+      *[!0-9]*)    _say "Invalid selection — skipped." ;;
+      *)
+        if [ "$choice" -ge 1 ] && [ "$choice" -le "$i" ]; then
+          _apply_preset "$choice"
+        else
+          _say "No preset $choice — skipped."
+        fi
+        ;;
+    esac
+  fi
+}
+
+_apply_preset() {
+  local want="$1" i=0 name theme width filled empty
+  while IFS='|' read -r name theme width filled empty; do
+    [ -z "$name" ] && continue
+    i=$(( i + 1 ))
+    [ "$i" = "$want" ] || continue
+
+    unset DPS_ORG DPS_SHOW_EFFORT DPS_SHOW_CTX DPS_SHOW_5H DPS_SHOW_7D \
+          DPS_SHOW_COST DPS_SHOW_BURN DPS_SHOW_OVERAGE
+    load_config
+    DPS_THEME="$theme"; DPS_BAR_WIDTH="$width"
+    DPS_BAR_FILLED="$filled"; DPS_BAR_EMPTY="$empty"
+
+    mkdir -p "$CONFIG_DIR"
+    cat >"$CONFIG_FILE" <<CFG
+# DevPilot Studio config — updated by \`dps gallery\`
+DPS_ORG="$DPS_ORG"
+DPS_THEME="$DPS_THEME"
+DPS_BAR_WIDTH="$DPS_BAR_WIDTH"
+DPS_BAR_FILLED="$DPS_BAR_FILLED"
+DPS_BAR_EMPTY="$DPS_BAR_EMPTY"
+DPS_SHOW_EFFORT="$DPS_SHOW_EFFORT"
+DPS_SHOW_CTX="$DPS_SHOW_CTX"
+DPS_SHOW_5H="$DPS_SHOW_5H"
+DPS_SHOW_7D="$DPS_SHOW_7D"
+DPS_SHOW_COST="$DPS_SHOW_COST"
+DPS_SHOW_BURN="$DPS_SHOW_BURN"
+DPS_SHOW_OVERAGE="$DPS_SHOW_OVERAGE"
+CFG
+    _say "Applied \"$name\" → $CONFIG_FILE"
+    _say "Start a new session to see your updated status bar."
+    return 0
+  done <<EOF
+$DPS_PRESETS
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# config wizard
+# ----------------------------------------------------------------------------
+TTY_IN="/dev/tty"
+TTY_OUT="/dev/tty"
+TTY_FD=""
+
+tty_ok() { { true 0<"$TTY_IN"; } 2>/dev/null; }
+
+_say() {
+  if tty_ok; then printf "%b\n" "$1" >"$TTY_OUT"; else printf "%b\n" "$1"; fi
+}
+
+_readline() {
+  if [ -n "$TTY_FD" ]; then
+    IFS= read -r -u "$TTY_FD" REPLY_LINE || REPLY_LINE=""
+  else
+    IFS= read -r REPLY_LINE <"$TTY_IN" || REPLY_LINE=""
+  fi
+}
+
+ask() {
+  local prompt="$1" default="$2"
+  if ! tty_ok; then printf "%s" "$default"; return; fi
+  if [ -n "$default" ]; then
+    printf "%b [%s]: " "$prompt" "$default" >"$TTY_OUT"
+  else
+    printf "%b: " "$prompt" >"$TTY_OUT"
+  fi
+  _readline
+  [ -z "$REPLY_LINE" ] && REPLY_LINE="$default"
+  printf "%s" "$REPLY_LINE"
+}
+
+ask_yn() {
+  local prompt="$1" default="$2" hint
+  if ! tty_ok; then printf "%s" "$default"; return; fi
+  if [ "$default" = "1" ]; then hint="Y/n"; else hint="y/N"; fi
+  printf "%b [%s]: " "$prompt" "$hint" >"$TTY_OUT"
+  _readline
+  case "$REPLY_LINE" in
+    [Yy]*) printf "1" ;;
+    [Nn]*) printf "0" ;;
+    *)     printf "%s" "$default" ;;
+  esac
+}
+
+cmd_config() {
+  if ! { true 0<"$TTY_IN"; } 2>/dev/null; then
+    _err "no interactive terminal available — run 'dps config' from terminal"
+    return 1
+  fi
+
+  exec 3<"$TTY_IN"
+  TTY_FD=3
+
+  load_config
+
+  _say ""
+  _say "\033[1mDevPilot Studio setup wizard\033[0m — press Enter to keep default.\n"
+
+  local org theme width filled empty style
+  local show_effort show_ctx show_5h show_7d show_overage show_cost show_burn
+
+  org=$(ask "Org / badge label (blank to hide)" "$DPS_ORG")
+
+  _say ""
+  _say "Segments display settings:"
+  show_effort=$(ask_yn "  Effort level" "$DPS_SHOW_EFFORT")
+  show_ctx=$(ask_yn "  Context window bar" "$DPS_SHOW_CTX")
+  show_5h=$(ask_yn "  5-hour usage bar" "$DPS_SHOW_5H")
+  show_7d=$(ask_yn "  7-day usage bar" "$DPS_SHOW_7D")
+  show_overage=$(ask_yn "  Overage bar" "$DPS_SHOW_OVERAGE")
+  show_cost=$(ask_yn "  Session cost" "$DPS_SHOW_COST")
+  show_burn=$(ask_yn "  Burn-rate warning" "$DPS_SHOW_BURN")
+
+  _say ""
+  _say "Color theme:"
+  _say "  1) default  — subtle dimmed colors"
+  _say "  2) mono     — grayscale only"
+  _say "  3) vivid    — high contrast vibrant colors"
+  local tsel tdefault
+  case "$DPS_THEME" in mono) tdefault=2 ;; vivid) tdefault=3 ;; *) tdefault=1 ;; esac
+  tsel=$(ask "  Choose 1-3" "$tdefault")
+  case "$tsel" in 2) theme="mono" ;; 3) theme="vivid" ;; *) theme="default" ;; esac
+
+  _say ""
+  _say "Bar style:"
+  _say "  1) █░   blocks (default)"
+  _say "  2) ▓░   shaded"
+  _say "  3) ■□   squares"
+  _say "  4) =-   ascii"
+  _say "  5) custom"
+  style=$(ask "  Choose 1-5" "1")
+  case "$style" in
+    2) filled="▓"; empty="░" ;;
+    3) filled="■"; empty="□" ;;
+    4) filled="="; empty="-" ;;
+    5)
+      filled=$(ask "    Filled char" "$DPS_BAR_FILLED")
+      empty=$(ask "    Empty char" "$DPS_BAR_EMPTY")
+      ;;
+    *) filled="█"; empty="░" ;;
+  esac
+
+  width=$(ask "Bar width (cells)" "$DPS_BAR_WIDTH")
+  case "$width" in ''|*[!0-9]*) width="$DPS_BAR_WIDTH" ;; esac
+  [ "$width" -lt 1 ] 2>/dev/null && width="$DPS_BAR_WIDTH"
+
+  mkdir -p "$CONFIG_DIR"
+  cat >"$CONFIG_FILE" <<EOF
+# DevPilot Studio config — generated by \`dps config\`
+DPS_ORG="$org"
+DPS_THEME="$theme"
+DPS_BAR_WIDTH="$width"
+DPS_BAR_FILLED="$filled"
+DPS_BAR_EMPTY="$empty"
+DPS_SHOW_EFFORT="$show_effort"
+DPS_SHOW_CTX="$show_ctx"
+DPS_SHOW_5H="$show_5h"
+DPS_SHOW_7D="$show_7d"
+DPS_SHOW_OVERAGE="$show_overage"
+DPS_SHOW_COST="$show_cost"
+DPS_SHOW_BURN="$show_burn"
+EOF
+
+  _say ""
+  _say "Saved configuration to \033[1m$CONFIG_FILE\033[0m"
+  _say ""
+  _say "Preview:"
+  _demo_json | cmd_render >"$TTY_OUT"
+  _say ""
+
+  exec 3<&-
+  TTY_FD=""
+}
+
+# ----------------------------------------------------------------------------
+# install / uninstall
+# ----------------------------------------------------------------------------
+cmd_install() {
+  if ! command -v jq >/dev/null 2>&1; then
+    _err "jq is required to install devpilot — see README for instructions"
+    return 1
+  fi
+
+  local self
+  self="${BASH_SOURCE[0]:-$0}"
+  case "$self" in
+    /*) : ;;
+    *)  self="$(cd "$(dirname "$self")" && pwd)/$(basename "$self")" ;;
+  esac
+
+  mkdir -p "$(dirname "$INSTALL_BIN")"
+  if [ "$self" != "$INSTALL_BIN" ]; then
+    cp "$self" "$INSTALL_BIN" || { _err "failed to copy devpilot to $INSTALL_BIN"; return 1; }
+  fi
+  chmod +x "$INSTALL_BIN"
+  printf "installed %s\n" "$INSTALL_BIN"
+
+  mkdir -p "$(dirname "$SETTINGS_FILE")"
+  [ -f "$SETTINGS_FILE" ] || printf '{}\n' >"$SETTINGS_FILE"
+  if ! jq empty "$SETTINGS_FILE" >/dev/null 2>&1; then
+    _err "$SETTINGS_FILE is not valid JSON — left untouched."
+    return 1
+  fi
+  cp "$SETTINGS_FILE" "${SETTINGS_FILE}.bak"
+  local tmp="${SETTINGS_FILE}.dps.tmp"
+  if jq --arg cmd "$INSTALL_BIN render" \
+        '.statusLine = {type: "command", command: $cmd, padding: 0}' \
+        "$SETTINGS_FILE" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$SETTINGS_FILE"
+    printf "configured status line in %s (backup: %s.bak)\n" "$SETTINGS_FILE" "$SETTINGS_FILE"
+  else
+    rm -f "$tmp"
+    _err "failed to edit $SETTINGS_FILE — left unchanged"
+    return 1
+  fi
+
+  printf "Done. Run 'dps config' to customize, then start a new session.\n"
+}
+
+cmd_uninstall() {
+  if [ -f "$SETTINGS_FILE" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e '.statusLine' "$SETTINGS_FILE" >/dev/null 2>&1; then
+      cp "$SETTINGS_FILE" "${SETTINGS_FILE}.bak"
+      local tmp="${SETTINGS_FILE}.dps.tmp"
+      if jq 'del(.statusLine)' "$SETTINGS_FILE" >"$tmp" 2>/dev/null; then
+        mv "$tmp" "$SETTINGS_FILE"
+        _say "Removed statusLine from $SETTINGS_FILE (backup: ${SETTINGS_FILE}.bak)"
+      else
+        rm -f "$tmp"
+        _err "failed to edit $SETTINGS_FILE — left unchanged"
+      fi
+    else
+      _say "No statusLine found in $SETTINGS_FILE"
+    fi
+  fi
+
+  local rm_files
+  rm_files=$(ask_yn "Also delete devpilot binary and config?" "0")
+  if [ "$rm_files" = "1" ]; then
+    rm -f "$INSTALL_BIN"
+    rm -rf "$CONFIG_DIR"
+    _say "Removed $INSTALL_BIN and $CONFIG_DIR"
+  fi
+  _say "Done. Restart session for changes to take effect."
+}
+
+# ----------------------------------------------------------------------------
+# meta
+# ----------------------------------------------------------------------------
+_err() { printf "devpilot: %b\n" "$1" >&2; }
+
+cmd_version() { printf "DevPilot Studio (dps / devpilot) %s\n" "$DPS_VERSION"; }
+
+cmd_help() {
+  cat <<'EOF'
+DevPilot Studio (dps / devpilot) — A professional desktop utility for Claude Code workflows.
+
+Usage:
+  dps render       Read status JSON on stdin and print the status bar.
+  dps stats        Show expanded usage metrics panel from latest render.
+  dps history      Show usage trends & sparklines from recorded snapshots.
+  dps config       Run interactive setup wizard.
+  dps gallery      Browse preset looks and apply one.
+  dps demo         Preview status bar with sample data (also: dps demo stats/history).
+  dps install      Copy devpilot script to ~/.local/bin and wire into settings.
+  dps uninstall    Remove status bar wiring from settings.
+  dps version      Print version information.
+  dps help         Show this help message.
+
+Config file: ${XDG_CONFIG_HOME:-~/.config}/devpilot/config
+Home:        https://github.com/mr-kumuditha/devpilot-studio
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# dispatch
+# ----------------------------------------------------------------------------
+main() {
+  case "${1:-}" in
+    render)                shift; cmd_render "$@" ;;
+    stats|status)          cmd_stats ;;
+    history|hist)          cmd_history ;;
+    config|configure|init) cmd_config ;;
+    gallery|presets)       cmd_gallery ;;
+    demo)                  shift; cmd_demo "$@" ;;
+    install)               cmd_install ;;
+    uninstall)             cmd_uninstall ;;
+    version|--version|-v)  cmd_version ;;
+    help|--help|-h)        cmd_help ;;
+    "")
+      if [ -t 0 ]; then cmd_help; else cmd_render; fi
+      ;;
+    *)
+      _err "unknown command '$1'"
+      printf "\n" >&2
+      cmd_help >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"
