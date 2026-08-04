@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "dps",
+  "displayName": "DevPilot Studio",
+  "version": "1.0.0",
+  "description": "DevPilot Studio — A professional desktop utility for managing Claude Code workflows, AI development sessions, project status, MCP servers, prompts, Git repositories, and developer productivity.",
+  "author": {
+    "name": "Kumuditha Tharinda Liyanage",
+    "email": "hello@kumuditha.dev",
+    "url": "https://github.com/mr-kumuditha"
+  },
+  "homepage": "https://github.com/mr-kumuditha/devpilot-studio#readme",
+  "repository": "https://github.com/mr-kumuditha/devpilot-studio",
+  "license": "MIT",
+  "keywords": [
+    "devpilot-studio",
+    "dps",
+    "devpilot",
+    "claude-code",
+    "statusline",
+    "cli",
+    "terminal",
+    "kumuditha-labs"
+  ],
+  "commands": ["./commands/"]
+}
