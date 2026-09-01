@@ -24,7 +24,7 @@ This is the easiest and most seamless installation path.
    ```bash
    /plugin install devpilot-studio
    ```
-4. Auto-Configure the status line:
+4. Wire in the status line (required — this does not happen automatically on install):
    ```bash
    /devpilot-studio:setup
    ```
@@ -84,7 +84,7 @@ After installing via any of the methods above, verify the installation by runnin
 
 ```bash
 dps version
-# Expected Output: DevPilot Studio v1.1.5
+# Expected Output: DevPilot Studio (dps / devpilot) 1.3.0
 ```
 
 If `dps` is not found, ensure that `~/.local/bin` is in your system `$PATH`. You can also execute the binary directly:

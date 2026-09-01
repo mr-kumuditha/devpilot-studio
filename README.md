@@ -9,7 +9,7 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/Version-1.1.5-blue.svg?style=for-the-badge&logo=anthropic)](https://github.com/mr-kumuditha/devpilot-studio)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg?style=for-the-badge&logo=anthropic)](https://github.com/mr-kumuditha/devpilot-studio)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Marketplace%20Plugin-000000?style=for-the-badge&logo=anthropic&logoColor=white)](https://github.com/mr-kumuditha/devpilot-studio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey?style=for-the-badge&logo=apple)](https://github.com/mr-kumuditha/devpilot-studio)
@@ -138,6 +138,7 @@ Once installed, DevPilot provides a standalone CLI binary called `dps` (or `devp
 | Command | Description | Example Output |
 | :--- | :--- | :--- |
 | `dps config` | Runs interactive setup wizard | `Choose theme: [1] default, [2] mono...` |
+| `dps theme <name>` | Switches color theme only (`default`/`mono`/`vivid`), keeping all other settings | `Theme set to "vivid" → ...config` |
 | `dps stats` | Displays expanded live usage panel | `Context: 84k / 200k (42%)` |
 | `dps history` | Displays 7-day sparkline charts | `5h peak   ▃▆▇▄▅▅▅` |
 | `dps gallery` | Previews and applies preset themes | `Applying 'vivid' theme...` |
@@ -171,7 +172,7 @@ For an in-depth breakdown of the bash engine, read [docs/ARCHITECTURE.md](docs/A
 This repository conforms strictly to the **Claude Code Plugin API**.
 
 - **Manifests:** Extends Claude Code via `.claude-plugin/plugin.json` and `marketplace.json`.
-- **Lifecycle:** Uses `hooks/hooks.json` to define a `Setup` event that triggers `/scripts/setup.sh`.
+- **Lifecycle:** `hooks/hooks.json` registers a `Setup` hook that runs `scripts/setup.sh`. Claude Code fires `Setup` hooks only for `claude --init` / `--maintenance`, so the normal install flow is to run `/devpilot-studio:setup` once by hand (see [Quick Start](#5-quick-start)).
 - **Slash Commands:** Command definitions in `commands/*.md` map user intents (like `/devpilot-studio:configure`) securely to the isolated `dps` binary via Bash allowlists.
 
 ---

@@ -30,6 +30,31 @@ The wizard will guide you through:
 
 ---
 
+## Fast Theme Switch
+
+To change only the color theme without stepping through the full wizard, use:
+
+```bash
+dps theme <name>
+```
+
+Where `<name>` is one of `default`, `mono`, or `vivid`. This updates `DPS_THEME`
+in your config file, leaves every other setting (badge, segment visibility, bar
+style, width) exactly as it was, prints a one-line confirmation, and shows a
+live preview. Invalid names are rejected with the list of valid options.
+
+```bash
+dps theme vivid     # switch to the high-contrast palette
+dps theme mono      # switch to grayscale
+```
+
+Also available through the npm wrapper: `npx devpilot-studio theme vivid`.
+
+Restart Claude Code (or start a new session) for the change to take effect in
+the status bar.
+
+---
+
 ## Environment Variable Reference
 
 If you prefer to configure DevPilot Studio manually or via dotfiles, here is the complete reference of supported variables.
@@ -76,6 +101,9 @@ Visibility flags accept `1` (true/visible) or `0` (false/hidden).
 
 ---
 
-## Legacy Fallback Support
+## Config File Parsing
 
-For backwards compatibility with `ccbar` (the upstream project), DevPilot Studio will automatically fall back to legacy `CCB_*` or `CCBAR_*` environment variables if the modern `DPS_*` variables are not defined. However, using the interactive `dps config` wizard will automatically migrate your configuration to the modern `DPS_*` namespace.
+The config file is **parsed line by line, never executed**. Only lines of the
+exact form `DPS_<KEY>="<value>"` whose `<KEY>` is a recognized `DPS_*` setting
+are applied; any other content in the file is ignored. Values are read as
+literal strings, so quotes and backslashes in a badge label are safe.
