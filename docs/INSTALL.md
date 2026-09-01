@@ -24,10 +24,16 @@ This is the easiest and most seamless installation path.
    ```bash
    /plugin install devpilot-studio
    ```
-4. Wire in the status line (required — this does not happen automatically on install):
+4. Run setup (required — nothing runs automatically on `/plugin install`):
    ```bash
    /devpilot-studio:setup
    ```
+   This installs the `devpilot` binary and wires the status line headlessly,
+   then asks you **three questions in the chat** — color theme (`default` /
+   `mono` / `vivid`), whether to show session cost, and an optional org / badge
+   label. Answer all three in one reply; it applies them with `dps set` and
+   prints a preview. (The full `dps config` wizard needs a real terminal and is
+   not used by this command.)
 5. **Restart Claude Code**: Exit the session (`/exit`) and restart `claude`.
 
 ---

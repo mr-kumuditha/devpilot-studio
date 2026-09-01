@@ -97,11 +97,17 @@ For more details, see [docs/INSTALL.md](docs/INSTALL.md).
 
 ## 5. Quick Start
 
-1. **Install the Plugin:** From inside Claude Code, run `/plugin install devpilot-studio`.
-2. **Setup:** Run `/devpilot-studio:setup` to wire the plugin into your settings.
-3. **Configure:** Run `/devpilot-studio:configure` (or `dps config` in a normal shell) to launch the interactive theme wizard.
-4. **Restart:** Exit Claude Code (`/exit`) and start a new session (`claude`).
-5. **Verify:** You will see the beautiful DevPilot Studio status bar at the bottom of your terminal!
+1. **Install the plugin:** From inside Claude Code, run `/plugin install devpilot-studio`.
+2. **Run setup:** Run `/devpilot-studio:setup`. This is not fully automatic — it
+   installs the binary and wires the status line, then **asks you three quick
+   questions in the chat** (theme, whether to show session cost, an optional
+   badge label). Answer them in one reply and it applies your choices and shows
+   a preview.
+3. **Restart:** Exit Claude Code (`/exit`) and start a new session (`claude`).
+4. **Verify:** The DevPilot Studio status bar appears at the bottom of your terminal.
+
+Prefer a terminal wizard? From a normal shell you can still run `dps config`
+(full interactive setup) or `dps theme <name>` (quick theme switch) any time.
 
 To **Update**, run `/plugin update devpilot-studio`.  
 To **Uninstall**, run `/devpilot-studio:uninstall`.

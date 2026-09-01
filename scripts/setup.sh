@@ -18,7 +18,7 @@ set -euo pipefail
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-DPS_VERSION="1.4.0"
+DPS_VERSION="1.5.0"
 
 INSTALL_BIN="$HOME/.local/bin/devpilot"
 SETTINGS_DIR="$HOME/.claude"
