@@ -10,8 +10,10 @@ burn-rate velocity alerts, session cost, and 7-day usage sparkline history.
 
 ## Architecture
 
-- **`bin/devpilot`** — Core engine (POSIX Bash, ~1100 lines). Handles all rendering,
-  stats, history, config wizard, gallery, install/uninstall.
+- **`bin/devpilot`** — Core engine (POSIX Bash). Handles all rendering, stats,
+  history, config wizard, gallery, themes (`default`/`mono`/`vivid`/`custom`,
+  optional true-color), named presets (`dps theme save/use/list`),
+  install/uninstall. The config file is parsed via an allowlist, never sourced.
 - **`cli.js`** — Node.js entrypoint wrapper for `npx devpilot-studio` installation.
 - **`scripts/setup.sh`** — Idempotent plugin setup script (platform detection, jq
   check, binary install, statusLine config).
@@ -49,7 +51,17 @@ bin/devpilot demo history
 # Test all commands
 bin/devpilot version
 bin/devpilot help
+
+# Theme switching and named presets
+bin/devpilot theme vivid
+bin/devpilot theme save mypreset
+bin/devpilot theme list
+bin/devpilot theme use mypreset
 ```
+
+When adding a `DPS_*` config key: add it to `DPS_CONFIG_KEYS`, give it a safe
+default in `load_config`, and document it in `README.md` and
+`docs/CONFIGURATION.md`. Never read config via `source`/`.`.
 
 ## Code Style
 

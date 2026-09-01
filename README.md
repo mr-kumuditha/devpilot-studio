@@ -115,19 +115,27 @@ Configuration is stored in `${XDG_CONFIG_HOME:-$HOME/.config}/devpilot/config`.
 | Environment Variable | Description | Default |
 | :--- | :--- | :--- |
 | `DPS_ORG` | Custom badge text displayed at front of status bar | `""` |
-| `DPS_THEME` | Color theme (`default`, `mono`, `vivid`) | `default` |
+| `DPS_THEME` | Color theme (`default`, `mono`, `vivid`, `custom`) | `default` |
 | `DPS_BAR_WIDTH` | Progress bar width in character cells | `10` |
 | `DPS_BAR_FILLED` | Character used for filled portion of progress bar | `█` |
 | `DPS_BAR_EMPTY` | Character used for empty portion of progress bar | `░` |
+| `DPS_LAYOUT` | Comma-separated order of line-2 segments; unknown names skipped | `ctx,5h,7d,over` |
+| `DPS_ICONS` | Use Nerd Font glyphs instead of plain-text segment labels (`1`/`0`) | `0` |
+| `DPS_TRUECOLOR` | Allow `DPS_COLOR_*` hex values on the `custom` theme (`1`/`0`) | `0` |
+| `DPS_THRESHOLD_MID` | Percent at which bars switch to the "mid" color (int 0–100, `< HIGH`) | `50` |
+| `DPS_THRESHOLD_HIGH` | Percent at which bars switch to the "high" color (int 0–100) | `80` |
+| `DPS_COLOR_*` | Per-role colors for `DPS_THEME=custom` (raw ANSI, or hex with `DPS_TRUECOLOR=1`). Full list in [docs/CONFIGURATION.md](docs/CONFIGURATION.md). | default theme |
 | `DPS_SHOW_EFFORT` | Toggle display of model effort level (`1`/`0`) | `1` |
 | `DPS_SHOW_CTX` | Toggle display of context window capacity bar (`1`/`0`) | `1` |
 | `DPS_SHOW_5H` | Toggle display of 5-hour rate limit bar (`1`/`0`) | `1` |
 | `DPS_SHOW_7D` | Toggle display of 7-day rate limit bar (`1`/`0`) | `1` |
+| `DPS_SHOW_OVERAGE` | Toggle display of the overage bar (`1`/`0`) | `0` |
 | `DPS_SHOW_COST` | Toggle display of session cost (`1`/`0`) | `0` |
 | `DPS_SHOW_BURN` | Toggle velocity burn-rate warning (`1`/`0`) | `1` |
+| `DPS_SHOW_CREDIT` | Append a dim `· tharinda.dev` credit to line 1 (`1`/`0`) | `0` |
 | `DPS_HISTORY` | Toggle local history logging (`1`/`0`) | `1` |
 
-For advanced customization and color codes, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+For advanced customization, the full `DPS_COLOR_*` list, and named presets (`dps theme save/use/list`), see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ---
 

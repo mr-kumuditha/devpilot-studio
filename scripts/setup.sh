@@ -18,7 +18,7 @@ set -euo pipefail
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-DPS_VERSION="1.3.0"
+DPS_VERSION="1.4.0"
 
 INSTALL_BIN="$HOME/.local/bin/devpilot"
 SETTINGS_DIR="$HOME/.claude"
@@ -220,6 +220,9 @@ main() {
   printf "\n" >&2
   info "DevPilot Studio setup complete"
   info "Start a new Claude Code session (or restart) to see your status bar"
+  info "Optional: set DPS_SHOW_CREDIT=1 in your config for a subtle status-bar credit (off by default)"
+  printf "\n" >&2
+  info "DevPilot Studio — built by tharinda.dev"
   printf "\n" >&2
 }
 
