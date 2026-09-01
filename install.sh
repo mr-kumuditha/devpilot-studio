@@ -73,21 +73,31 @@ chmod +x "$BIN"
 ok "installed ${B}$BIN${R}"
 
 # ---- 3. wire into Claude Code settings --------------------------------------
-mkdir -p "$SETTINGS_DIR"
-if [ ! -f "$SETTINGS" ]; then
-  printf '{}\n' > "$SETTINGS"
+# Shared statusLine wiring logic (also used by scripts/setup.sh). Prefer a local
+# checkout; fall back to downloading it for the `curl | bash` install path.
+_lib="scripts/lib/wire-statusline.sh"
+if [ -n "${DPS_SRC:-}" ] && [ -f "$(dirname "$DPS_SRC")/../$_lib" ]; then
+  # shellcheck source=scripts/lib/wire-statusline.sh
+  . "$(dirname "$DPS_SRC")/../$_lib"
+elif [ -f "$_lib" ]; then
+  # shellcheck source=scripts/lib/wire-statusline.sh
+  . "$_lib"
+else
+  _libtmp="$(mktemp)"
+  curl -fsSL "$RAW_BASE/$_lib" -o "$_libtmp" || die "failed to download $_lib"
+  # shellcheck source=/dev/null
+  . "$_libtmp"
+  rm -f "$_libtmp"
 fi
 
-if ! jq empty "$SETTINGS" >/dev/null 2>&1; then
-  die "$SETTINGS is not valid JSON — leaving it untouched. Fix it and re-run."
+if dps_wire_statusline "$SETTINGS" "$BIN render" 0; then
+  ok "configured status line in ${B}$SETTINGS${R} ${DIM}(backup: ${SETTINGS}.bak)${R}"
+else
+  case $? in
+    1) die "$SETTINGS is not valid JSON — leaving it untouched. Fix it and re-run." ;;
+    *) die "failed to update $SETTINGS — left unchanged" ;;
+  esac
 fi
-
-cp "$SETTINGS" "${SETTINGS}.bak"
-tmp="${SETTINGS}.dps.tmp"
-jq --arg cmd "$BIN render" \
-   '.statusLine = {type: "command", command: $cmd, padding: 0}' \
-   "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
-ok "configured status line in ${B}$SETTINGS${R} ${DIM}(backup: ${SETTINGS}.bak)${R}"
 
 # ---- 4. run the setup wizard ------------------------------------------------
 say ""

@@ -18,7 +18,7 @@ set -euo pipefail
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-DPS_VERSION="1.2.0"
+DPS_VERSION="1.3.0"
 
 INSTALL_BIN="$HOME/.local/bin/devpilot"
 SETTINGS_DIR="$HOME/.claude"
@@ -28,6 +28,15 @@ SETTINGS_FILE="$SETTINGS_DIR/settings.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUNDLED_BIN="$PLUGIN_ROOT/bin/devpilot"
+
+# Shared statusLine wiring logic (also used by install.sh)
+if [ -f "$SCRIPT_DIR/lib/wire-statusline.sh" ]; then
+  # shellcheck source=scripts/lib/wire-statusline.sh
+  . "$SCRIPT_DIR/lib/wire-statusline.sh"
+else
+  printf "  ✗ %s\n" "missing $SCRIPT_DIR/lib/wire-statusline.sh" >&2
+  exit 1
+fi
 
 # --------------------------------------------------------------------------
 # Output helpers
@@ -135,43 +144,26 @@ install_binary() {
 # Configure statusLine in settings.json
 # --------------------------------------------------------------------------
 configure_statusline() {
-  mkdir -p "$SETTINGS_DIR"
+  local rc
+  dps_wire_statusline "$SETTINGS_FILE" "$INSTALL_BIN render" 1 && rc=0 || rc=$?
 
-  # Create settings.json if it doesn't exist
-  if [ ! -f "$SETTINGS_FILE" ]; then
-    printf '{}\n' > "$SETTINGS_FILE"
-  fi
-
-  # Validate existing JSON
-  if ! jq empty "$SETTINGS_FILE" >/dev/null 2>&1; then
-    err "$SETTINGS_FILE is not valid JSON — leaving it untouched"
-    err "Fix the file manually, then run /devpilot-studio:setup"
-    return 1
-  fi
-
-  # Check if already configured with devpilot
-  local current_cmd
-  current_cmd=$(jq -r '.statusLine.command // ""' "$SETTINGS_FILE" 2>/dev/null || echo "")
-  if echo "$current_cmd" | grep -q "devpilot render"; then
-    info "statusLine already configured for devpilot in $SETTINGS_FILE"
-    return 0
-  fi
-
-  # Backup existing settings
-  cp "$SETTINGS_FILE" "${SETTINGS_FILE}.bak"
-
-  # Merge statusLine config (preserving all other settings)
-  local tmp="${SETTINGS_FILE}.dps.tmp"
-  if jq --arg cmd "$INSTALL_BIN render" \
-        '.statusLine = {type: "command", command: $cmd, padding: 0}' \
-        "$SETTINGS_FILE" > "$tmp" 2>/dev/null; then
-    mv "$tmp" "$SETTINGS_FILE"
-    info "configured statusLine in $SETTINGS_FILE (backup: ${SETTINGS_FILE}.bak)"
-  else
-    rm -f "$tmp"
-    err "failed to update $SETTINGS_FILE — left unchanged"
-    return 1
-  fi
+  case "$rc" in
+    0)
+      info "configured statusLine in $SETTINGS_FILE (backup: ${SETTINGS_FILE}.bak)"
+      ;;
+    3)
+      info "statusLine already configured for devpilot in $SETTINGS_FILE"
+      ;;
+    1)
+      err "$SETTINGS_FILE is not valid JSON — leaving it untouched"
+      err "Fix the file manually, then run /devpilot-studio:setup"
+      return 1
+      ;;
+    *)
+      err "failed to update $SETTINGS_FILE — left unchanged"
+      return 1
+      ;;
+  esac
 }
 
 # --------------------------------------------------------------------------

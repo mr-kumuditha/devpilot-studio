@@ -23,7 +23,7 @@ const SETTINGS_DIR = path.join(HOME, '.claude');
 const SETTINGS = path.join(SETTINGS_DIR, 'settings.json');
 const BUNDLED = path.join(__dirname, 'bin', 'devpilot');
 
-const FORWARD = ['render', 'stats', 'status', 'history', 'hist', 'config', 'gallery', 'presets', 'demo', 'uninstall', 'version', 'help'];
+const FORWARD = ['render', 'stats', 'status', 'history', 'hist', 'config', 'theme', 'gallery', 'presets', 'demo', 'uninstall', 'version', 'help'];
 
 const tty = process.stdout.isTTY;
 const c = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);

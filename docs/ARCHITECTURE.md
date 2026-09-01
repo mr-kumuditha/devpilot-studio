@@ -52,4 +52,13 @@ The structure is:
 When a user runs `dps history`, the script parses this TSV using `awk` to extract daily maximums and generates terminal sparklines based on the extracted data.
 
 ### 4. Setup Hooks
-The `scripts/setup.sh` script is invoked via the `.claude-plugin/hooks.json` lifecycle hook upon plugin installation. It reads `~/.claude/settings.json`, merges the `statusLine` injection, and writes a `.bak` backup file.
+`hooks/hooks.json` registers a `Setup` hook that runs `scripts/setup.sh`. Claude
+Code only fires `Setup` hooks when it is launched with `--init` or
+`--maintenance` — **not** automatically after `/plugin install` or on a normal
+session start. For the usual install flow, run `/devpilot-studio:setup` (which
+invokes the same script) once by hand.
+
+The shared wiring logic lives in `scripts/lib/wire-statusline.sh` and is sourced
+by both `scripts/setup.sh` and `install.sh`. It reads `~/.claude/settings.json`,
+validates it as JSON, writes a `.bak` backup, and merges the `statusLine`
+injection while preserving every other key.
