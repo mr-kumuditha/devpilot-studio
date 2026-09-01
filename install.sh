@@ -115,6 +115,9 @@ say "Preview:"
 "$BIN" demo || true
 say ""
 say "Start a new Claude Code session (or restart) to see your status bar."
+say "${DIM}Optional: set DPS_SHOW_CREDIT=1 in your config for a subtle status-bar credit (off by default).${R}"
+say ""
+say "DevPilot Studio — built by tharinda.dev"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) : ;;

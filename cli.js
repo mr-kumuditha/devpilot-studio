@@ -105,6 +105,8 @@ function runInstall() {
   console.log('\nPreview:');
   spawnSync(BIN, ['demo'], { stdio: 'inherit' });
   console.log('\nStart a new Claude Code session (or restart) to see your status bar.');
+  console.log(dim('Optional: set DPS_SHOW_CREDIT=1 in your config for a subtle status-bar credit (off by default).'));
+  console.log('\nDevPilot Studio — built by tharinda.dev');
 
   if (!(process.env.PATH || '').split(path.delimiter).includes(BIN_DIR)) {
     console.log('');

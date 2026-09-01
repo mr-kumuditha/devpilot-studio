@@ -16,7 +16,8 @@
 #   dps stats         Show an expanded usage panel from the latest render.
 #   dps history       Show usage trends from recorded snapshots.
 #   dps config        Run the interactive setup wizard.
-#   dps theme <name>  Switch the color theme (default, mono, vivid) and preview.
+#   dps theme <name>  Switch the color theme (default, mono, vivid, custom).
+#   dps theme save|use|list   Save, load, or list named custom presets.
 #   dps gallery       Browse preset looks and apply one.
 #   dps demo          Preview with sample data (also: demo stats, demo history).
 #   dps install       Copy devpilot to ~/.local/bin and wire into Claude Code.
@@ -27,7 +28,7 @@
 # Home: https://github.com/mr-kumuditha/devpilot-studio
 # License: MIT (see LICENSE and NOTICE.md)
 
-DPS_VERSION="1.3.0"
+DPS_VERSION="1.4.0"
 
 # ----------------------------------------------------------------------------
 # Configuration & State Paths
@@ -47,6 +48,22 @@ INSTALL_BIN="$HOME/.local/bin/devpilot"
 # ----------------------------------------------------------------------------
 # Config loading
 # ----------------------------------------------------------------------------
+# Every DPS_* key that may appear in the config file. The file is parsed, never
+# sourced, and only these exact names are honored (see _read_config_file). Keep
+# this list, load_config's defaults, and the docs in sync.
+DPS_CONFIG_KEYS="
+DPS_ORG DPS_THEME DPS_BAR_WIDTH DPS_BAR_FILLED DPS_BAR_EMPTY
+DPS_SHOW_EFFORT DPS_SHOW_CTX DPS_SHOW_5H DPS_SHOW_7D DPS_SHOW_OVERAGE
+DPS_SHOW_COST DPS_SHOW_BURN DPS_HISTORY
+DPS_LAYOUT DPS_ICONS DPS_TRUECOLOR DPS_SHOW_CREDIT
+DPS_THRESHOLD_MID DPS_THRESHOLD_HIGH
+DPS_COLOR_MODEL DPS_COLOR_ARROW DPS_COLOR_DIR DPS_COLOR_ORG DPS_COLOR_BRACKET
+DPS_COLOR_LABEL DPS_COLOR_RESETTXT
+DPS_COLOR_BAR_LOW DPS_COLOR_BAR_MID DPS_COLOR_BAR_HIGH
+DPS_COLOR_EFFORT_LOW DPS_COLOR_EFFORT_MED DPS_COLOR_EFFORT_HIGH
+DPS_COLOR_EFFORT_XHIGH DPS_COLOR_EFFORT_MAX DPS_COLOR_EFFORT_DEFAULT
+"
+
 load_config() {
   _read_config_file
 
@@ -63,6 +80,44 @@ load_config() {
   DPS_SHOW_COST="${DPS_SHOW_COST:-0}"
   DPS_SHOW_BURN="${DPS_SHOW_BURN:-1}"
   DPS_HISTORY="${DPS_HISTORY:-1}"
+
+  # Segment assembly order for line 2. Unknown names are skipped silently.
+  DPS_LAYOUT="${DPS_LAYOUT:-ctx,5h,7d,over}"
+  # Nerd Font glyph labels instead of plain text. Off by default.
+  DPS_ICONS="${DPS_ICONS:-0}"
+  # Allow DPS_COLOR_* to be hex (e.g. ff8800) on the custom theme. Off by default.
+  DPS_TRUECOLOR="${DPS_TRUECOLOR:-0}"
+  # Opt-in "· tharinda.dev" credit at the end of line 1. Off by default.
+  DPS_SHOW_CREDIT="${DPS_SHOW_CREDIT:-0}"
+
+  # Bar colour-switch thresholds. Must be integers 0-100 with MID < HIGH;
+  # anything else falls back to the historical 50 / 80.
+  DPS_THRESHOLD_MID="${DPS_THRESHOLD_MID:-50}"
+  DPS_THRESHOLD_HIGH="${DPS_THRESHOLD_HIGH:-80}"
+  case "$DPS_THRESHOLD_MID"  in ''|*[!0-9]*) DPS_THRESHOLD_MID=50 ;; esac
+  case "$DPS_THRESHOLD_HIGH" in ''|*[!0-9]*) DPS_THRESHOLD_HIGH=80 ;; esac
+  { [ "$DPS_THRESHOLD_MID" -ge 0 ] && [ "$DPS_THRESHOLD_MID" -le 100 ]; }  || DPS_THRESHOLD_MID=50
+  { [ "$DPS_THRESHOLD_HIGH" -ge 0 ] && [ "$DPS_THRESHOLD_HIGH" -le 100 ]; } || DPS_THRESHOLD_HIGH=80
+  [ "$DPS_THRESHOLD_MID" -lt "$DPS_THRESHOLD_HIGH" ] || { DPS_THRESHOLD_MID=50; DPS_THRESHOLD_HIGH=80; }
+
+  # Custom-theme colour overrides. Empty means "use the default theme's value"
+  # (handled in apply_theme), so an incomplete custom config still renders.
+  DPS_COLOR_MODEL="${DPS_COLOR_MODEL-}"
+  DPS_COLOR_ARROW="${DPS_COLOR_ARROW-}"
+  DPS_COLOR_DIR="${DPS_COLOR_DIR-}"
+  DPS_COLOR_ORG="${DPS_COLOR_ORG-}"
+  DPS_COLOR_BRACKET="${DPS_COLOR_BRACKET-}"
+  DPS_COLOR_LABEL="${DPS_COLOR_LABEL-}"
+  DPS_COLOR_RESETTXT="${DPS_COLOR_RESETTXT-}"
+  DPS_COLOR_BAR_LOW="${DPS_COLOR_BAR_LOW-}"
+  DPS_COLOR_BAR_MID="${DPS_COLOR_BAR_MID-}"
+  DPS_COLOR_BAR_HIGH="${DPS_COLOR_BAR_HIGH-}"
+  DPS_COLOR_EFFORT_LOW="${DPS_COLOR_EFFORT_LOW-}"
+  DPS_COLOR_EFFORT_MED="${DPS_COLOR_EFFORT_MED-}"
+  DPS_COLOR_EFFORT_HIGH="${DPS_COLOR_EFFORT_HIGH-}"
+  DPS_COLOR_EFFORT_XHIGH="${DPS_COLOR_EFFORT_XHIGH-}"
+  DPS_COLOR_EFFORT_MAX="${DPS_COLOR_EFFORT_MAX-}"
+  DPS_COLOR_EFFORT_DEFAULT="${DPS_COLOR_EFFORT_DEFAULT-}"
 }
 
 # Reverse the escaping applied by _esc_config (\" -> " and \\ -> \). Result in
@@ -83,11 +138,23 @@ _unescape_config() {
   REPLY_UNESC="$out"
 }
 
-# Read CONFIG_FILE line by line WITHOUT sourcing it. Only lines of the exact
-# form DPS_<KEY>="<value>" whose KEY is in the explicit allowlist below are
-# honored; every other line (including anything executable) is ignored.
+# True if $1 is one of the allowlisted DPS_CONFIG_KEYS.
+_is_config_key() {
+  local k
+  for k in $DPS_CONFIG_KEYS; do
+    [ "$k" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# Read a config file line by line WITHOUT sourcing it. Only lines of the exact
+# form DPS_<KEY>="<value>" whose KEY is in DPS_CONFIG_KEYS are honored; every
+# other line (including anything executable) is ignored. $1 defaults to
+# CONFIG_FILE. Assignment is via `printf -v` to a name taken only from the
+# vetted allowlist — the value is never interpreted as code.
 _read_config_file() {
-  [ -f "$CONFIG_FILE" ] || return 0
+  local file="${1:-$CONFIG_FILE}"
+  [ -f "$file" ] || return 0
   local line key val
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
@@ -102,22 +169,8 @@ _read_config_file() {
     case "$val" in
       *\\*) _unescape_config "$val"; val="$REPLY_UNESC" ;;
     esac
-    case "$key" in
-      DPS_ORG)         DPS_ORG="$val" ;;
-      DPS_THEME)       DPS_THEME="$val" ;;
-      DPS_BAR_WIDTH)   DPS_BAR_WIDTH="$val" ;;
-      DPS_BAR_FILLED)  DPS_BAR_FILLED="$val" ;;
-      DPS_BAR_EMPTY)   DPS_BAR_EMPTY="$val" ;;
-      DPS_SHOW_EFFORT) DPS_SHOW_EFFORT="$val" ;;
-      DPS_SHOW_CTX)    DPS_SHOW_CTX="$val" ;;
-      DPS_SHOW_5H)     DPS_SHOW_5H="$val" ;;
-      DPS_SHOW_7D)     DPS_SHOW_7D="$val" ;;
-      DPS_SHOW_OVERAGE) DPS_SHOW_OVERAGE="$val" ;;
-      DPS_SHOW_COST)   DPS_SHOW_COST="$val" ;;
-      DPS_SHOW_BURN)   DPS_SHOW_BURN="$val" ;;
-      DPS_HISTORY)     DPS_HISTORY="$val" ;;
-    esac
-  done < "$CONFIG_FILE"
+    _is_config_key "$key" && printf -v "$key" '%s' "$val"
+  done < "$file"
 }
 
 # Escape a value for embedding in a DPS_<KEY>="..." line. Result in REPLY_ESC.
@@ -128,33 +181,21 @@ _esc_config() {
   REPLY_ESC="$s"
 }
 
-# Rewrite CONFIG_FILE from the current DPS_* environment. Callers load_config
-# first, so unset keys keep their existing on-disk value rather than a hardcoded
-# default. Every string value is escaped so it round-trips through
-# _read_config_file without executing anything.
+# Rewrite a config file from the current DPS_* environment. Callers load_config
+# first, so keys absent from the old file keep their live value rather than a
+# hardcoded default. Every value is escaped so it round-trips through
+# _read_config_file without executing anything. $1 defaults to CONFIG_FILE.
 _write_config() {
-  mkdir -p "$CONFIG_DIR"
-  local org theme filled empty
-  _esc_config "${DPS_ORG-}";        org="$REPLY_ESC"
-  _esc_config "${DPS_THEME-}";      theme="$REPLY_ESC"
-  _esc_config "${DPS_BAR_FILLED-}"; filled="$REPLY_ESC"
-  _esc_config "${DPS_BAR_EMPTY-}";  empty="$REPLY_ESC"
-  cat >"$CONFIG_FILE" <<EOF
-# DevPilot Studio config — generated by \`dps\`
-DPS_ORG="$org"
-DPS_THEME="$theme"
-DPS_BAR_WIDTH="$DPS_BAR_WIDTH"
-DPS_BAR_FILLED="$filled"
-DPS_BAR_EMPTY="$empty"
-DPS_SHOW_EFFORT="$DPS_SHOW_EFFORT"
-DPS_SHOW_CTX="$DPS_SHOW_CTX"
-DPS_SHOW_5H="$DPS_SHOW_5H"
-DPS_SHOW_7D="$DPS_SHOW_7D"
-DPS_SHOW_OVERAGE="$DPS_SHOW_OVERAGE"
-DPS_SHOW_COST="$DPS_SHOW_COST"
-DPS_SHOW_BURN="$DPS_SHOW_BURN"
-DPS_HISTORY="$DPS_HISTORY"
-EOF
+  local file="${1:-$CONFIG_FILE}" k v
+  mkdir -p "$(dirname "$file")"
+  {
+    printf '# DevPilot Studio config — generated by `dps`\n'
+    for k in $DPS_CONFIG_KEYS; do
+      v="${!k-}"
+      _esc_config "$v"
+      printf '%s="%s"\n' "$k" "$REPLY_ESC"
+    done
+  } >"$file"
 }
 
 # ----------------------------------------------------------------------------
@@ -162,9 +203,66 @@ EOF
 # ----------------------------------------------------------------------------
 RESET='\033[0m'
 
+# The built-in "default" palette, factored out so the custom theme can use each
+# value as the fallback for an unset DPS_COLOR_* override.
+_palette_default() {
+  C_MODEL='\033[2m'
+  C_ARROW='\033[2;37m'
+  C_DIR='\033[2;36m'
+  C_ORG='\033[1;31m'
+  C_BRACKET='\033[2;37m'
+  C_LABEL='\033[2;37m'
+  C_RESETTXT='\033[2m'
+  BAR_LOW='\033[0;32m'; BAR_MID='\033[2;33m'; BAR_HIGH='\033[0;31m'
+  E_LOW='\033[0;32m'; E_MED='\033[2;36m'; E_HIGH='\033[2;33m'
+  E_XHIGH='\033[2;35m'; E_MAX='\033[0;31m'; E_DEFAULT='\033[2m'
+}
+
+# Resolve one custom colour. $1 = configured value, $2 = fallback (the default
+# theme's value, already set).
+#   empty                         -> fallback
+#   6-digit hex, DPS_TRUECOLOR=1  -> 24-bit ANSI sequence
+#   6-digit hex, DPS_TRUECOLOR=0  -> fallback (never print a bare hex string)
+#   anything else                 -> passed through verbatim (raw escape sequence)
+_theme_color() {
+  local v="$1" fb="$2" r g b
+  [ -n "$v" ] || { printf '%s' "$fb"; return; }
+  case "$v" in
+    [0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])
+      if [ "${DPS_TRUECOLOR:-0}" = "1" ]; then
+        r=$(( 16#${v:0:2} )); g=$(( 16#${v:2:2} )); b=$(( 16#${v:4:2} ))
+        printf '\\033[38;2;%d;%d;%dm' "$r" "$g" "$b"
+      else
+        printf '%s' "$fb"
+      fi
+      return
+      ;;
+  esac
+  printf '%s' "$v"
+}
+
 apply_theme() {
   local theme="$1"
   case "$theme" in
+    custom)
+      _palette_default
+      C_MODEL=$(_theme_color "$DPS_COLOR_MODEL" "$C_MODEL")
+      C_ARROW=$(_theme_color "$DPS_COLOR_ARROW" "$C_ARROW")
+      C_DIR=$(_theme_color "$DPS_COLOR_DIR" "$C_DIR")
+      C_ORG=$(_theme_color "$DPS_COLOR_ORG" "$C_ORG")
+      C_BRACKET=$(_theme_color "$DPS_COLOR_BRACKET" "$C_BRACKET")
+      C_LABEL=$(_theme_color "$DPS_COLOR_LABEL" "$C_LABEL")
+      C_RESETTXT=$(_theme_color "$DPS_COLOR_RESETTXT" "$C_RESETTXT")
+      BAR_LOW=$(_theme_color "$DPS_COLOR_BAR_LOW" "$BAR_LOW")
+      BAR_MID=$(_theme_color "$DPS_COLOR_BAR_MID" "$BAR_MID")
+      BAR_HIGH=$(_theme_color "$DPS_COLOR_BAR_HIGH" "$BAR_HIGH")
+      E_LOW=$(_theme_color "$DPS_COLOR_EFFORT_LOW" "$E_LOW")
+      E_MED=$(_theme_color "$DPS_COLOR_EFFORT_MED" "$E_MED")
+      E_HIGH=$(_theme_color "$DPS_COLOR_EFFORT_HIGH" "$E_HIGH")
+      E_XHIGH=$(_theme_color "$DPS_COLOR_EFFORT_XHIGH" "$E_XHIGH")
+      E_MAX=$(_theme_color "$DPS_COLOR_EFFORT_MAX" "$E_MAX")
+      E_DEFAULT=$(_theme_color "$DPS_COLOR_EFFORT_DEFAULT" "$E_DEFAULT")
+      ;;
     mono)
       C_MODEL='\033[2m'
       C_ARROW='\033[2;37m'
@@ -190,16 +288,7 @@ apply_theme() {
       E_XHIGH='\033[1;35m'; E_MAX='\033[1;31m'; E_DEFAULT='\033[1;37m'
       ;;
     *) # default
-      C_MODEL='\033[2m'
-      C_ARROW='\033[2;37m'
-      C_DIR='\033[2;36m'
-      C_ORG='\033[1;31m'
-      C_BRACKET='\033[2;37m'
-      C_LABEL='\033[2;37m'
-      C_RESETTXT='\033[2m'
-      BAR_LOW='\033[0;32m'; BAR_MID='\033[2;33m'; BAR_HIGH='\033[0;31m'
-      E_LOW='\033[0;32m'; E_MED='\033[2;36m'; E_HIGH='\033[2;33m'
-      E_XHIGH='\033[2;35m'; E_MAX='\033[0;31m'; E_DEFAULT='\033[2m'
+      _palette_default
       ;;
   esac
 }
@@ -215,9 +304,9 @@ render_bar() {
   [ "$pct" -lt 0 ] && pct=0
 
   local color="$BAR_LOW"
-  if [ "$pct" -ge 80 ]; then
+  if [ "$pct" -ge "${DPS_THRESHOLD_HIGH:-80}" ]; then
     color="$BAR_HIGH"
-  elif [ "$pct" -ge 50 ]; then
+  elif [ "$pct" -ge "${DPS_THRESHOLD_MID:-50}" ]; then
     color="$BAR_MID"
   fi
 
@@ -285,6 +374,61 @@ render_burn() {
   fi
 }
 
+# Nerd Font glyph for a segment name, emitted as raw UTF-8 bytes (octal escapes
+# so it works on Bash 3.2 without $'...'). Only used when DPS_ICONS=1.
+_icon() {
+  case "$1" in
+    ctx)  printf '\357\202\256' ;;  # U+F0AE  nf-fa-tasks
+    5h)   printf '\357\200\227' ;;  # U+F017  nf-fa-clock_o
+    7d)   printf '\357\201\263' ;;  # U+F073  nf-fa-calendar
+    over) printf '\357\201\261' ;;  # U+F071  nf-fa-exclamation_triangle
+  esac
+}
+
+# The coloured label + trailing alignment space(s) that precede a segment's bar.
+# Plain text (ctx / 5h / 7d / over) is the unconditional default and preserves
+# the historical spacing exactly; DPS_ICONS=1 swaps in a Nerd Font glyph.
+_seg_label() {
+  local name="$1" glyph
+  if [ "${DPS_ICONS:-0}" = "1" ]; then
+    glyph=$(_icon "$name")
+    [ -n "$glyph" ] || glyph="$name"
+    printf '%s' "${C_LABEL}${glyph}${RESET} "
+    return
+  fi
+  case "$name" in
+    ctx)  printf '%s' "${C_LABEL}ctx${RESET} " ;;
+    5h)   printf '%s' "${C_LABEL}5h${RESET}  " ;;
+    7d)   printf '%s' "${C_LABEL}7d${RESET}  " ;;
+    over) printf '%s' "${C_LABEL}over${RESET} " ;;
+  esac
+}
+
+# Terminal-width adaptation for real status-line rendering. When the terminal is
+# narrower than the thresholds below, shed content in this order:
+#   1. the effort-level segment   2. the org badge   3. shrink DPS_BAR_WIDTH
+# Width is taken from $COLUMNS, else `tput cols` when a tty is attached. If it
+# cannot be determined (piped output, no tput), nothing changes and rendering
+# keeps today's fixed-width behaviour.
+_adapt_width() {
+  local cols=""
+  if [ -n "${COLUMNS:-}" ]; then
+    cols="$COLUMNS"
+  elif command -v tput >/dev/null 2>&1 && { [ -t 1 ] || [ -t 2 ]; }; then
+    cols=$(tput cols 2>/dev/null)
+  fi
+  case "$cols" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$cols" -gt 0 ] || return 0
+
+  [ "$cols" -lt 100 ] && DPS_SHOW_EFFORT=0
+  [ "$cols" -lt 80 ]  && DPS_ORG=""
+  if [ "$cols" -lt 60 ]; then
+    local w=$(( cols / 6 ))
+    [ "$w" -lt 4 ] && w=4
+    [ "$w" -lt "$DPS_BAR_WIDTH" ] && DPS_BAR_WIDTH="$w"
+  fi
+}
+
 # ----------------------------------------------------------------------------
 # render — main status line rendering
 # ----------------------------------------------------------------------------
@@ -296,6 +440,7 @@ cmd_render() {
 
   load_config
   apply_theme "$DPS_THEME"
+  _adapt_width
 
   local input
   input=$(cat)
@@ -392,49 +537,68 @@ _render_status() {
     line1="${line1} ${C_LABEL}\$$(printf '%.2f' "$cost")${RESET}"
   fi
 
-  local line2="" seg bar
-  if [ "$DPS_SHOW_CTX" = "1" ] && [ -n "$ctx_pct" ]; then
-    bar=$(render_bar "$ctx_pct")
-    line2="${C_LABEL}ctx${RESET} ${bar} $(printf '%.0f' "$ctx_pct")%"
+  # Opt-in author credit at the very end of line 1 (default off).
+  if [ "${DPS_SHOW_CREDIT:-0}" = "1" ]; then
+    line1="${line1} ${C_RESETTXT}· tharinda.dev${RESET}"
   fi
 
-  if [ "$DPS_SHOW_5H" = "1" ]; then
-    if [ -n "$five_pct" ]; then
-      bar=$(render_bar "$five_pct")
-      seg="${C_LABEL}5h${RESET}  ${bar} $(printf '%.0f' "$five_pct")%"
-      if [ -n "$five_reset" ]; then
-        seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$five_reset")${C_RESETTXT})${RESET}"
-      fi
-      if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$five_reset" ]; then
-        seg="${seg}$(render_burn "$five_pct" "$five_reset" $((5 * 3600)))"
-      fi
-      if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
-    elif [ -n "$has_rl" ]; then
-      seg="${C_LABEL}5h${RESET}  ${C_RESETTXT}idle${RESET}"
-      if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
-    fi
-  fi
-
-  if [ "$DPS_SHOW_7D" = "1" ] && [ -n "$week_pct" ]; then
-    bar=$(render_bar "$week_pct")
-    seg="${C_LABEL}7d${RESET}  ${bar} $(printf '%.0f' "$week_pct")%"
-    if [ -n "$week_reset" ]; then
-      seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$week_reset")${C_RESETTXT})${RESET}"
-    fi
-    if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$week_reset" ]; then
-      seg="${seg}$(render_burn "$week_pct" "$week_reset" $((7 * 86400)))"
-    fi
+  # Line 2 is assembled by walking DPS_LAYOUT (default "ctx,5h,7d,over").
+  # Each segment keeps its exact historical rendering; only the order is
+  # data-driven. Unknown names are skipped silently.
+  local line2="" seg bar tok
+  local -a _layout=()
+  IFS=$',\n' read -ra _layout <<< "$DPS_LAYOUT"
+  for tok in "${_layout[@]}"; do
+    seg=""
+    case "$tok" in
+      ctx)
+        if [ "$DPS_SHOW_CTX" = "1" ] && [ -n "$ctx_pct" ]; then
+          bar=$(render_bar "$ctx_pct")
+          seg="$(_seg_label ctx)${bar} $(printf '%.0f' "$ctx_pct")%"
+        fi
+        ;;
+      5h)
+        if [ "$DPS_SHOW_5H" = "1" ]; then
+          if [ -n "$five_pct" ]; then
+            bar=$(render_bar "$five_pct")
+            seg="$(_seg_label 5h)${bar} $(printf '%.0f' "$five_pct")%"
+            if [ -n "$five_reset" ]; then
+              seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$five_reset")${C_RESETTXT})${RESET}"
+            fi
+            if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$five_reset" ]; then
+              seg="${seg}$(render_burn "$five_pct" "$five_reset" $((5 * 3600)))"
+            fi
+          elif [ -n "$has_rl" ]; then
+            seg="$(_seg_label 5h)${C_RESETTXT}idle${RESET}"
+          fi
+        fi
+        ;;
+      7d)
+        if [ "$DPS_SHOW_7D" = "1" ] && [ -n "$week_pct" ]; then
+          bar=$(render_bar "$week_pct")
+          seg="$(_seg_label 7d)${bar} $(printf '%.0f' "$week_pct")%"
+          if [ -n "$week_reset" ]; then
+            seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$week_reset")${C_RESETTXT})${RESET}"
+          fi
+          if [ "$DPS_SHOW_BURN" = "1" ] && [ -n "$week_reset" ]; then
+            seg="${seg}$(render_burn "$week_pct" "$week_reset" $((7 * 86400)))"
+          fi
+        fi
+        ;;
+      over)
+        if [ "$DPS_SHOW_OVERAGE" = "1" ] && [ -n "$over_pct" ]; then
+          bar=$(render_bar "$over_pct")
+          seg="$(_seg_label over)${bar} $(printf '%.0f' "$over_pct")%"
+          if [ -n "$over_reset" ]; then
+            seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$over_reset")${C_RESETTXT})${RESET}"
+          fi
+        fi
+        ;;
+      *) seg="" ;;
+    esac
+    [ -n "$seg" ] || continue
     if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
-  fi
-
-  if [ "$DPS_SHOW_OVERAGE" = "1" ] && [ -n "$over_pct" ]; then
-    bar=$(render_bar "$over_pct")
-    seg="${C_LABEL}over${RESET} ${bar} $(printf '%.0f' "$over_pct")%"
-    if [ -n "$over_reset" ]; then
-      seg="${seg} ${C_RESETTXT}(resets ${RESET}$(render_reset "$over_reset")${C_RESETTXT})${RESET}"
-    fi
-    if [ -n "$line2" ]; then line2="${line2}   ${seg}"; else line2="$seg"; fi
-  fi
+  done
 
   printf "%b" "$line1"
   [ -n "$line2" ] && printf "\n%b" "$line2"
@@ -1039,34 +1203,95 @@ cmd_config() {
 }
 
 # ----------------------------------------------------------------------------
-# theme — fast single-key theme switch
+# theme — fast theme switch + named custom presets
 # ----------------------------------------------------------------------------
+PRESET_DIR="$CONFIG_DIR/presets"
+
+# Strict preset-name allowlist: letters, digits, dash, underscore only. Blocks
+# path traversal (no "/", no ".", no "..") before the name touches a path.
+_valid_preset_name() {
+  case "$1" in
+    ''|*[!A-Za-z0-9_-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+_theme_preview() {
+  command -v jq >/dev/null 2>&1 || return 0
+  apply_theme "$DPS_THEME"
+  _say ""
+  _render_status "$(_demo_json)"
+}
+
+_theme_save() {
+  local name="$1"
+  if ! _valid_preset_name "$name"; then
+    _err "invalid preset name '$name' — use letters, digits, dash, underscore only"
+    return 2
+  fi
+  load_config
+  mkdir -p "$PRESET_DIR"
+  _write_config "$PRESET_DIR/$name"
+  _say "Saved current config as preset \"$name\" → $PRESET_DIR/$name"
+}
+
+_theme_use() {
+  local name="$1"
+  if ! _valid_preset_name "$name"; then
+    _err "invalid preset name '$name' — use letters, digits, dash, underscore only"
+    return 2
+  fi
+  local f="$PRESET_DIR/$name"
+  if [ ! -f "$f" ]; then
+    _err "no saved preset '$name' — run 'dps theme list' to see what's available"
+    return 1
+  fi
+  load_config                 # defaults + current config
+  _read_config_file "$f"      # overlay the preset (safe parser, never sourced)
+  _write_config               # persist merged result to the live config
+  _say "Applied preset \"$name\" → $CONFIG_FILE"
+  _say "Start a new session to apply it everywhere."
+  _theme_preview
+}
+
+_theme_list() {
+  if [ ! -d "$PRESET_DIR" ]; then
+    _say "No saved presets yet. Create one with: dps theme save <name>"
+    return 0
+  fi
+  local f found=0
+  for f in "$PRESET_DIR"/*; do
+    [ -f "$f" ] || continue
+    found=1
+    _say "  $(basename "$f")"
+  done
+  [ "$found" = "1" ] || _say "No saved presets yet. Create one with: dps theme save <name>"
+}
+
 cmd_theme() {
-  local theme="${1-}"
-  case "$theme" in
+  local sub="${1-}"
+  case "$sub" in
+    save)  shift; _theme_save "${1-}"; return $? ;;
+    use)   shift; _theme_use  "${1-}"; return $? ;;
+    list)  _theme_list; return $? ;;
     default|mono|vivid) : ;;
     "")
-      _err "usage: dps theme <default|mono|vivid>"
+      _err "usage: dps theme <default|mono|vivid> | save <name> | use <name> | list"
       return 2
       ;;
     *)
-      _err "unknown theme '$theme' — valid options: default, mono, vivid"
+      _err "unknown theme '$sub' — valid options: default, mono, vivid (or: save, use, list)"
       return 2
       ;;
   esac
 
   load_config
-  DPS_THEME="$theme"
+  DPS_THEME="$sub"
   _write_config
 
-  _say "Theme set to \"$theme\" → $CONFIG_FILE"
+  _say "Theme set to \"$sub\" → $CONFIG_FILE"
   _say "Start a new session to apply it everywhere."
-
-  if command -v jq >/dev/null 2>&1; then
-    apply_theme "$DPS_THEME"
-    _say ""
-    _render_status "$(_demo_json)"
-  fi
+  _theme_preview
 }
 
 # ----------------------------------------------------------------------------
@@ -1146,7 +1371,10 @@ cmd_uninstall() {
 # ----------------------------------------------------------------------------
 _err() { printf "devpilot: %b\n" "$1" >&2; }
 
-cmd_version() { printf "DevPilot Studio (dps / devpilot) %s\n" "$DPS_VERSION"; }
+cmd_version() {
+  printf "DevPilot Studio (dps / devpilot) %s\n" "$DPS_VERSION"
+  printf "DevPilot Studio — built by tharinda.dev\n"
+}
 
 cmd_help() {
   cat <<'EOF'
@@ -1157,7 +1385,8 @@ Usage:
   dps stats        Show expanded usage metrics panel from latest render.
   dps history      Show usage trends & sparklines from recorded snapshots.
   dps config       Run interactive setup wizard.
-  dps theme <name> Switch color theme (default | mono | vivid) and preview.
+  dps theme <name> Switch color theme (default | mono | vivid | custom) and preview.
+  dps theme save <name> / use <name> / list   Manage named custom presets.
   dps gallery      Browse preset looks and apply one.
   dps demo         Preview status bar with sample data (also: dps demo stats/history).
   dps install      Copy devpilot script to ~/.local/bin and wire into settings.
@@ -1167,6 +1396,8 @@ Usage:
 
 Config file: ${XDG_CONFIG_HOME:-~/.config}/devpilot/config
 Home:        https://github.com/mr-kumuditha/devpilot-studio
+
+DevPilot Studio — built by tharinda.dev
 EOF
 }
 

@@ -2,6 +2,51 @@
 
 All notable changes to DevPilot Studio are documented here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-09-01
+
+Theme customization and developer attribution. Every new option is off by
+default — an existing config with none of these keys renders exactly as before.
+
+### Added
+- **Custom color theme** (`DPS_THEME=custom`): reads per-role colors from
+  `DPS_COLOR_MODEL`, `DPS_COLOR_ARROW`, `DPS_COLOR_DIR`, `DPS_COLOR_ORG`,
+  `DPS_COLOR_BRACKET`, `DPS_COLOR_LABEL`, `DPS_COLOR_RESETTXT`,
+  `DPS_COLOR_BAR_LOW/MID/HIGH`, and
+  `DPS_COLOR_EFFORT_LOW/MED/HIGH/XHIGH/MAX/DEFAULT`. Any unset value falls back
+  to the `default` theme, so an incomplete custom config still renders.
+- **True-color** (`DPS_TRUECOLOR=1`): on the custom theme, `DPS_COLOR_*` may be
+  6-digit hex (e.g. `ff8800`), converted to 24-bit ANSI. Built-in themes are
+  unchanged.
+- **Configurable bar thresholds** (`DPS_THRESHOLD_MID` = 50, `DPS_THRESHOLD_HIGH`
+  = 80): the low/mid/high color switch points for every bar. Non-integer,
+  out-of-range, or `MID >= HIGH` values fall back to 50 / 80.
+- **Configurable segment order** (`DPS_LAYOUT` = `ctx,5h,7d,over`): line 2 is
+  assembled by walking this list. Unknown names are skipped silently. The
+  default order is byte-for-byte identical to previous output.
+- **Terminal-width awareness**: for real status-line rendering, when width is
+  known (`$COLUMNS` or `tput cols` with a tty) and the terminal is narrow, the
+  effort segment is dropped first, then the org badge, then `DPS_BAR_WIDTH`
+  shrinks. When width can't be determined, behavior is unchanged.
+- **Named presets**: `dps theme save <name>`, `dps theme use <name>`,
+  `dps theme list`. Presets live in `$CONFIG_DIR/presets/`; `<name>` is
+  restricted to `[A-Za-z0-9_-]` to prevent path traversal. `use` loads through
+  the same safe parser — never sourced.
+- **Icon mode** (`DPS_ICONS=1`): swaps the `ctx` / `5h` / `7d` / `over` labels
+  for Nerd Font glyphs. Plain text is the default.
+- **Developer credit**: `DevPilot Studio — built by tharinda.dev` is printed
+  once by `dps version`, `dps help`, `scripts/setup.sh`, `install.sh`, and the
+  `npx` installer. It is never printed on the render path.
+- **Opt-in status-bar credit** (`DPS_SHOW_CREDIT=1`, default `0`): appends a dim
+  `· tharinda.dev` to the end of line 1, after the cost segment. The installers
+  mention it; nothing enables it automatically.
+
+### Changed
+- `apply_theme`'s `default` palette is factored into `_palette_default` (no
+  behavior change) so the custom theme can reuse it as its fallback.
+- The config parser and writer are now driven by a single `DPS_CONFIG_KEYS`
+  allowlist covering all new keys; assignment still never interprets values as
+  code.
+
 ## [1.3.0] - 2026-09-01
 
 Bug-fix, cleanup, and security-hardening pass on the Claude Code integration.
