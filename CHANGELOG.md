@@ -2,6 +2,34 @@
 
 All notable changes to DevPilot Studio are documented here. This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-09-01
+
+Chat-driven first-run onboarding.
+
+### Added
+- **`dps set <KEY> <VALUE>`** — non-interactive setter for a single config key.
+  Validates `<KEY>` against the same `DPS_CONFIG_KEYS` allowlist used by the
+  safe parser, writes through the same escaped `_write_config` as `dps config`
+  and `dps theme` (so every other key keeps its value), and never reads a TTY.
+  Unknown keys and missing arguments are rejected with exit code 2.
+
+### Changed
+- **`/devpilot-studio:setup` is now chat-driven.** It runs `scripts/setup.sh`
+  headlessly, then asks the user for a theme, whether to show session cost, and
+  an optional badge label **in the chat**, applies the answers with `dps set`,
+  and shows a `dps demo` preview. It no longer points at the TTY-only
+  `dps config` wizard, which fails when invoked from a slash command.
+- README Quick Start and `docs/INSTALL.md` now describe setup accurately: one
+  slash command, a few chat questions, then a restart — not "automatic".
+
+### Notes
+- `hooks/hooks.json`'s `Setup` event is a valid Claude Code hook event
+  (verified against Claude Code 2.1.252), but it only fires on
+  `claude --init` / `--maintenance`, not on `/plugin install`. Manual
+  `/devpilot-studio:setup` remains the intended first-run path. The hook is
+  left in place (valid, harmless, useful for `--init` users).
+- `cmd_config` (the terminal wizard) is unchanged.
+
 ## [1.4.0] - 2026-09-01
 
 Theme customization and developer attribution. Every new option is off by

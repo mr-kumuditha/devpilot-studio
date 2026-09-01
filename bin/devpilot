@@ -15,7 +15,8 @@
 #   dps render        Read status JSON on stdin and print the status bar.
 #   dps stats         Show an expanded usage panel from the latest render.
 #   dps history       Show usage trends from recorded snapshots.
-#   dps config        Run the interactive setup wizard.
+#   dps config        Run the interactive setup wizard (needs a real terminal).
+#   dps set KEY VALUE Set one config key non-interactively (no TTY needed).
 #   dps theme <name>  Switch the color theme (default, mono, vivid, custom).
 #   dps theme save|use|list   Save, load, or list named custom presets.
 #   dps gallery       Browse preset looks and apply one.
@@ -28,7 +29,7 @@
 # Home: https://github.com/mr-kumuditha/devpilot-studio
 # License: MIT (see LICENSE and NOTICE.md)
 
-DPS_VERSION="1.4.0"
+DPS_VERSION="1.5.0"
 
 # ----------------------------------------------------------------------------
 # Configuration & State Paths
@@ -1295,6 +1296,32 @@ cmd_theme() {
 }
 
 # ----------------------------------------------------------------------------
+# set — non-interactive per-key config setter (no TTY required)
+# ----------------------------------------------------------------------------
+# Writes exactly one config key. Reuses the same allowlist (_is_config_key) and
+# escaped writer (_write_config) built for cmd_config / dps theme, so every
+# other key already in the file keeps its value. Never reads a TTY.
+cmd_set() {
+  local key="${1-}" val="${2-}"
+
+  if [ -z "$key" ]; then
+    _err "usage: dps set <KEY> <VALUE>"
+    return 2
+  fi
+  if ! _is_config_key "$key"; then
+    _err "unknown config key '$key' — not in the DPS_* allowlist (see docs/CONFIGURATION.md)"
+    return 2
+  fi
+
+  load_config                    # defaults + every key already on disk
+  printf -v "$key" '%s' "$val"   # name is allowlist-vetted; value never eval'd
+  _write_config                  # same escaped writer as cmd_config / dps theme
+
+  _say "Set $key=\"$val\" → $CONFIG_FILE"
+  _say "Start a new session (or /exit and restart) to apply it."
+}
+
+# ----------------------------------------------------------------------------
 # install / uninstall
 # ----------------------------------------------------------------------------
 cmd_install() {
@@ -1384,7 +1411,8 @@ Usage:
   dps render       Read status JSON on stdin and print the status bar.
   dps stats        Show expanded usage metrics panel from latest render.
   dps history      Show usage trends & sparklines from recorded snapshots.
-  dps config       Run interactive setup wizard.
+  dps config       Run interactive setup wizard (needs a real terminal).
+  dps set <KEY> <VALUE>   Set one config key non-interactively (no TTY needed).
   dps theme <name> Switch color theme (default | mono | vivid | custom) and preview.
   dps theme save <name> / use <name> / list   Manage named custom presets.
   dps gallery      Browse preset looks and apply one.
@@ -1411,6 +1439,7 @@ main() {
     history|hist)          cmd_history ;;
     config|configure|init) cmd_config ;;
     theme)                 shift; cmd_theme "$@" ;;
+    set)                   shift; cmd_set "$@" ;;
     gallery|presets)       cmd_gallery ;;
     demo)                  shift; cmd_demo "$@" ;;
     install)               cmd_install ;;

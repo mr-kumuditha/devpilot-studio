@@ -11,15 +11,21 @@ burn-rate velocity alerts, session cost, and 7-day usage sparkline history.
 ## Architecture
 
 - **`bin/devpilot`** — Core engine (POSIX Bash). Handles all rendering, stats,
-  history, config wizard, gallery, themes (`default`/`mono`/`vivid`/`custom`,
-  optional true-color), named presets (`dps theme save/use/list`),
-  install/uninstall. The config file is parsed via an allowlist, never sourced.
+  history, config wizard (`dps config`, needs a TTY), non-interactive per-key
+  setter (`dps set <KEY> <VALUE>`, no TTY), gallery, themes
+  (`default`/`mono`/`vivid`/`custom`, optional true-color), named presets
+  (`dps theme save/use/list`), install/uninstall. The config file is parsed via
+  an allowlist, never sourced; `cmd_config`, `dps theme`, and `dps set` all
+  write through the same escaped `_write_config`.
 - **`cli.js`** — Node.js entrypoint wrapper for `npx devpilot-studio` installation.
 - **`scripts/setup.sh`** — Idempotent plugin setup script (platform detection, jq
   check, binary install, statusLine config).
 - **`.claude-plugin/`** — Plugin and marketplace manifests.
 - **`hooks/hooks.json`** — Claude Code lifecycle hooks (Setup event).
 - **`commands/`** — Slash commands (`setup`, `configure`, `demo`, `uninstall`).
+  `setup` is chat-driven: it runs `scripts/setup.sh` headlessly, then asks the
+  user theme / cost / badge questions in chat and applies them via `dps set`
+  (it never calls the TTY-only `dps config`).
 
 ## Key Dependencies
 
